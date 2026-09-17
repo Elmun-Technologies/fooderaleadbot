@@ -28,7 +28,7 @@ visitor / exhibitor                private sales group                database
 - [Pipeline statuses](#pipeline-statuses)
 - [Commands and callbacks](#commands-and-callbacks)
 - [Data model](#data-model)
-- [Deployment](#deployment)
+- [Deployment](#deployment) (systemd · Fly.io · Docker)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
 
@@ -387,6 +387,62 @@ and restarts it on failure. Telegram Ads traffic is bursty: the bot is stateless
 restart costs nothing — an interrupted answer is simply re-asked, and a lead that was already
 saved is never saved twice.
 
+### Fly.io (recommended for a campaign: one worker + one Postgres)
+
+The repository ships [`Dockerfile`](Dockerfile) and [`fly.toml`](fly.toml); `fly.toml` is written
+for a **worker** (no `[[services]]`, no public port), migrates on deploy via
+`release_command = "alembic upgrade head"`, and disables autostop — a suspended machine silently
+stops receiving Telegram updates.
+
+```bash
+# 0. flyctl: https://fly.io/docs/hands-on/install-flyctl/  then `fly auth login`
+fly launch --no-deploy                     # asks for the app name + region, keeps this fly.toml
+
+# 1. the database (a 1-node cluster is plenty for an event)
+fly postgres create  --name foodera-pg --vm-size shared-cpu-1x --volume-size 5 --region fra
+fly postgres attach  --app <app-name> foodera-pg    # injects DATABASE_URL as a secret
+
+# 2. the bot's own configuration - secrets, not [env]
+fly secrets set BOT_TOKEN="123456:ABC..." \
+                SALES_GROUP_ID="-1001234567890" \
+                ADMIN_USER_IDS="111111" \
+                SUPPORT_USERNAME="foodera_support" \
+                QUALIFY_MIN_CLASSIFICATION="warm"
+
+# 3. ship it
+fly deploy && fly logs
+```
+
+`fly postgres attach` writes a `postgres://user:pass@host/db` URL; the settings layer rewrites it
+to `postgresql+asyncpg://` (and doubles `%` for Alembic), so no manual editing is needed.
+
+Day-to-day:
+
+| Task | Command |
+|---|---|
+| live logs | `fly logs -a <app-name>` |
+| shell inside the container (check data, reproduce a conversation) | `fly ssh console` |
+| run migrations by hand | `fly ssh console -C "alembic upgrade head"` |
+| change a setting without a rebuild | `fly secrets set WARM_MIN_SCORE=60` (restarts the machine) |
+| list what is set (values hidden) | `fly secrets list` |
+| burst protection for the last day of the expo | `fly scale count 2` **plus** `REDIS_URL` (shared FSM) |
+| previous version | `fly deployments` → `fly deploy --image <digest>` |
+
+Prefer SQLite for a throwaway instance? Create a volume, uncomment the `[[mounts]]` block in
+`fly.toml`, and set `DATABASE_URL=sqlite+aiosqlite:////data/foodera.db` — four slashes for an
+absolute path, and the volume is what keeps leads across restarts.
+
+### Anywhere else (Docker)
+
+```bash
+docker build -t foodera-leadbot .
+docker run --rm --env-file .env foodera-leadbot                       # the bot
+docker run --rm --env-file .env foodera-leadbot alembic upgrade head   # migrations
+```
+
+The image runs as a non-root user, writes nothing to disk unless you point `DATABASE_URL` at
+SQLite, and needs only outbound HTTPS to `api.telegram.org:443`.
+
 ### Checklist for production
 
 - `DATABASE_URL=postgresql+asyncpg://…`, `AUTO_CREATE_TABLES=false`, migrations via Alembic.
@@ -440,6 +496,7 @@ app/
   handlers/            engine.py (ask/advance/back/skip/finish) + start, language,
                        qualification, visitor, admin, fallback
   bot.py / main.py     assembly and entry point
+Dockerfile / fly.toml  container + Fly.io worker (no public port)
 alembic/               one reversible migration
 scripts/demo_run.py    offline preview of copy, scoring and cards
 tests/                 unit tests + test_journey.py (real updates through the real routers)

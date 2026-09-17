@@ -42,6 +42,14 @@ class TestDatabaseUrl:
             ("postgres://u:p@localhost/db", "postgresql+asyncpg://"),
             ("postgresql+asyncpg://u:p@localhost/db", "postgresql+asyncpg://"),
             ("sqlite:///./bot.db", "sqlite+aiosqlite:///"),
+            ("sqlite+pysqlite:////data/foodera.db", "sqlite+aiosqlite:////data/"),
+            # what a PaaS hands you, verbatim
+            (
+                "postgres://foodera:S3cr3t@666.internal.fly.dev:5432/foodera_leads?sslmode=disable",
+                "postgresql+asyncpg://foodera:",
+            ),
+            ("postgresql+psycopg://u:p@localhost/db", "postgresql+asyncpg://"),
+            ("postgresql+psycopg2://u:p@localhost/db", "postgresql+asyncpg://"),
         ],
     )
     def test_async_driver_is_forced(self, raw: str, expected_prefix: str) -> None:

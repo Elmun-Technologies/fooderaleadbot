@@ -21,7 +21,12 @@ _ID_SEPARATOR = re.compile(r"[,\s;]+")
 _DATABASE_URL_ALIASES = (
     ("postgres://", "postgresql+asyncpg://"),
     ("postgresql://", "postgresql+asyncpg://"),
+    # PaaS dashboards (Fly.io, Supabase, Neon, Heroku) hand out `postgres://…` URLs and docs
+    # often show the sync psycopg drivers; the bot only speaks asyncpg.
+    ("postgresql+psycopg://", "postgresql+asyncpg://"),
+    ("postgresql+psycopg2://", "postgresql+asyncpg://"),
     ("sqlite://", "sqlite+aiosqlite://"),
+    ("sqlite+pysqlite://", "sqlite+aiosqlite://"),
 )
 
 

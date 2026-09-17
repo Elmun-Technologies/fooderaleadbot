@@ -1,0 +1,54 @@
+# FOODERA EXPO 2026 lead bot on Fly.io.
+#
+# `fly launch` fills in the app name and may rewrite a few defaults on the first run -
+# commit whatever it produces and keep the rest of this file.
+#
+# The bot is a *worker*: it only makes outbound HTTPS calls to Telegram, so there is no
+# [[services]] block, no HTTP port and no public IP. That is intentional - the only
+# secret in this project (BOT_TOKEN) has nothing listening for it.
+
+app = 'foodera-leadbot'   # change to your own globally unique name
+primary_region = 'fra'    # closest region to Uzbekistan; 'sin' or 'bom' work too
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  LOG_LEVEL = "INFO"
+  LOG_JSON = "true"             # one JSON object per line: `fly logs` stays greppable
+  DISPLAY_TIMEZONE = "Asia/Tashkent"
+  AUTO_CREATE_TABLES = "false"  # the release_command below migrates instead
+
+# BOT_TOKEN, SALES_GROUP_ID, ADMIN_USER_IDS, DATABASE_URL and friends are secrets:
+# set them with `fly secrets set ...` (see README "Deploy to Fly.io"), never here.
+
+[processes]
+  app = "python -m app.main"
+
+[deploy]
+  # Schema first: if the migration fails, the deploy is aborted and the old machine keeps running.
+  release_command = "alembic upgrade head"
+  strategy = "rolling_machines"
+
+  # Long polling only receives updates while a machine runs. Autostopping would silently
+  # drop leads during the quiet hours, so the bot must never be suspended.
+  auto_stop_machines = false
+  min_machines_running = 1
+
+[restart]
+  policy = "always"
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
+
+# Optional: a persistent volume so the bot can run on SQLite instead of Postgres
+# (fine for one expo campaign, not for anything you cannot afford to lose):
+#
+#   fly volumes create foodera_bot_data --size 1 --region fra
+#   fly secrets set DATABASE_URL="sqlite+aiosqlite:////data/foodera.db"   # four slashes!
+#
+# [[mounts]]
+#   source = "foodera_bot_data"
+#   destination = "/data"
+#   initial_size = "1gb"

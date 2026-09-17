@@ -28,8 +28,11 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
-database_url = os.getenv("DATABASE_URL") or settings.database_url
-config.set_main_option("sqlalchemy.url", database_url)
+# The settings object normalises the driver (`postgres://…` from a PaaS dashboard becomes
+# asyncpg), which is what makes migrations behave exactly like the running bot.
+database_url = settings.database_url
+# Alembic reads this through ConfigParser, so a `%` in a password must be doubled here.
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
