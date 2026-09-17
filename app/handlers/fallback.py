@@ -54,21 +54,56 @@ async def unknown_command(message: Message, **data: Any) -> None:
 
 @router.message(StateFilter(None), F.text & ~F.command, PrivateChat())
 async def message_outside_flow(message: Message, **data: Any) -> None:
-    """A plain text message with no active questionnaire: offer the funnel again."""
+    """A plain text message with no active questionnaire: offer funnel or treat as chat."""
     settings: Settings = data["settings"]
     lang: str = data.get("lang", settings.default_language)
     leads = data.get("leads")
+    repo = data.get("repo")
     user = data.get("user")
+    bot = data.get("bot")
 
     if leads is not None and user is not None:
         draft = await leads.repo.active_draft(
             user.telegram_user_id, ttl_hours=settings.draft_ttl_hours
         )
         if draft is not None:
-            # local import: start.py and fallback.py are sibling routers of the same package
             from app.handlers.start import begin_questions
 
             await begin_questions(message, data, draft, first_step=await leads.resume_step(draft))
+            return
+
+        # No draft, but user has completed leads before -> treat as direct chat message
+        last_lead = await repo.last_completed(user.telegram_user_id) if repo else None
+        if last_lead is not None and repo is not None:
+            # Save inbound chat
+            from app.services.chat_service import ChatService
+
+            chat_service = ChatService(bot, repo)
+            await chat_service.save_inbound(
+                user.telegram_user_id,
+                text=message.text,
+                lead_id=last_lead.id,
+                telegram_message_id=message.message_id,
+            )
+            # Forward to sales group if configured
+            if settings.sales_group_id and bot is not None:
+                try:
+                    forward_text = (
+                        f"💬 <b>{last_lead.lead_code}</b> dan xabar:\n\n{message.text}\n\n"
+                        f"Javob berish uchun ushbu xabarga reply qiling."
+                    )
+                    # If lead card exists, reply to it
+                    if last_lead.notify_chat_id and last_lead.notify_message_id:
+                        await bot.send_message(
+                            last_lead.notify_chat_id,
+                            forward_text,
+                            reply_to_message_id=last_lead.notify_message_id,
+                        )
+                    else:
+                        await bot.send_message(settings.sales_group_id, forward_text)
+                except Exception:
+                    pass
+            await message.answer(t("chat.received", lang))
             return
 
     await message.answer(
@@ -79,9 +114,58 @@ async def message_outside_flow(message: Message, **data: Any) -> None:
 
 @router.message(StateFilter(None), ~F.text, PrivateChat())
 async def unsupported_media(message: Message, **data: Any) -> None:
-    """Photos / stickers / voice messages outside the form."""
+    """Photos / stickers / voice messages outside the form - treat as chat if lead exists."""
     settings: Settings = data["settings"]
     lang: str = data.get("lang", settings.default_language)
+    repo = data.get("repo")
+    bot = data.get("bot")
+    user = data.get("user")
+
+    if repo is not None and user is not None:
+        last_lead = await repo.last_completed(user.telegram_user_id)
+        if last_lead is not None:
+            from app.services.chat_service import ChatService
+
+            photo_file_id = None
+            document_file_id = None
+            file_name = None
+            text = message.caption or ""
+
+            if message.photo:
+                photo_file_id = message.photo[-1].file_id
+            if message.document:
+                document_file_id = message.document.file_id
+                file_name = message.document.file_name
+
+            chat_service = ChatService(bot, repo)
+            await chat_service.save_inbound(
+                user.telegram_user_id,
+                text=text,
+                lead_id=last_lead.id,
+                photo_file_id=photo_file_id,
+                document_file_id=document_file_id,
+                file_name=file_name,
+                telegram_message_id=message.message_id,
+            )
+            # Forward to group
+            if settings.sales_group_id and bot is not None:
+                try:
+                    caption = f"💬 <b>{last_lead.lead_code}</b> dan media xabar"
+                    if text:
+                        caption += f":\n\n{text}"
+                    if photo_file_id:
+                        await bot.send_photo(
+                            settings.sales_group_id, photo=photo_file_id, caption=caption
+                        )
+                    elif document_file_id:
+                        await bot.send_document(
+                            settings.sales_group_id, document=document_file_id, caption=caption
+                        )
+                except Exception:
+                    pass
+            await message.answer(t("chat.received", lang))
+            return
+
     await message.answer(t("err.use_buttons", lang))
 
 

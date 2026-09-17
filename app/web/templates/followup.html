@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Follow-up Marketing - FOODERA{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">🔄 Follow-up Marketing</h1>
+        <div class="flex gap-2">
+            <form method="POST" action="/admin/followup/run">
+                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
+                    <i class="fas fa-play mr-1"></i> Hozir ishga tushirish
+                </button>
+            </form>
+            <a href="/admin/followup/create" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                <i class="fas fa-plus mr-1"></i> Yangi template
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl p-4 border">
+            <p class="text-sm text-gray-600">Jami template</p>
+            <p class="text-2xl font-bold">{{ templates|length }}</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 border">
+            <p class="text-sm text-gray-600">Faol</p>
+            <p class="text-2xl font-bold text-green-600">{{ templates|selectattr('is_active')|list|length }}</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 border">
+            <p class="text-sm text-gray-600">Yuborilgan log</p>
+            <p class="text-2xl font-bold">{{ total_logs }}</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 border">
+            <p class="text-sm text-gray-600">Trigger turlari</p>
+            <p class="text-2xl font-bold">{{ trigger_counts|length }}</p>
+        </div>
+    </div>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <h3 class="font-semibold text-blue-900 mb-2">💡 Follow-up qanday ishlaydi?</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
+            <div>
+                <p class="font-medium mb-1">Triggerlar:</p>
+                <ul class="list-disc list-inside space-y-1 text-xs">
+                    <li><b>draft_abandoned</b> - anketani yarim qoldirganlar (2h, 24h)</li>
+                    <li><b>started_not_completed</b> - /start bosgan lekin boshlamaganlar (1h)</li>
+                    <li><b>completed_exhibitor</b> - exhibitor bo'lib ro'yxatdan o'tganlar (0h, 24h)</li>
+                    <li><b>completed_visitor</b> - mehmon bo'lib o'tganlar (0h, 72h)</li>
+                    <li><b>hot_lead / warm_lead / cold_lead</b> - tasnif bo'yicha</li>
+                    <li><b>status_new</b> - NEW holatda 24h dan ortiq qolganlar</li>
+                </ul>
+            </div>
+            <div>
+                <p class="font-medium mb-1">Tizim:</p>
+                <ul class="list-disc list-inside space-y-1 text-xs">
+                    <li>Har 5 daqiqada avtomatik tekshiradi</li>
+                    <li>Har bir foydalanuvchiga har bir template faqat 1 marta yuboriladi (spam yo'q)</li>
+                    <li>UZ va RU uchun alohida template (til bo'yicha filtr)</li>
+                    <li>Rasm/file biriktirish mumkin</li>
+                    <li>Admin paneldan qo'lda ham ishga tushirish mumkin</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div class="p-4 border-b flex justify-between items-center">
+            <h3 class="font-semibold">Template lar ({{ templates|length }})</h3>
+            <span class="text-xs text-gray-500">Priority bo'yicha saralangan</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 border-b">
+                    <tr class="text-left text-xs font-medium text-gray-500 uppercase">
+                        <th class="px-4 py-3">Nomi</th>
+                        <th class="px-4 py-3">Trigger</th>
+                        <th class="px-4 py-3">Kechikish</th>
+                        <th class="px-4 py-3">Til</th>
+                        <th class="px-4 py-3">Matn</th>
+                        <th class="px-4 py-3">Yuborilgan</th>
+                        <th class="px-4 py-3">Faol</th>
+                        <th class="px-4 py-3">Amal</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for tpl in templates %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm font-medium">{{ tpl.name }}</td>
+                        <td class="px-4 py-3"><span class="px-2 py-1 bg-gray-100 rounded text-xs">{{ tpl.trigger }}</span></td>
+                        <td class="px-4 py-3 text-sm">{{ tpl.delay_hours }}h</td>
+                        <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs {% if tpl.language == 'uz' %}bg-blue-100{% else %}bg-purple-100{% endif %}">{{ tpl.language.upper() }}</span></td>
+                        <td class="px-4 py-3 text-xs max-w-xs truncate">{{ tpl.text[:80] }}</td>
+                        <td class="px-4 py-3 text-sm">{{ tpl.total_sent }}</td>
+                        <td class="px-4 py-3">
+                            {% if tpl.is_active %}<span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Faol</span>
+                            {% else %}<span class="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">Nofaol</span>{% endif %}
+                        </td>
+                        <td class="px-4 py-3 flex gap-1">
+                            <a href="/admin/followup/{{ tpl.id }}" class="text-blue-600 hover:underline text-xs">Ko'rish</a>
+                            <form method="POST" action="/admin/followup/{{ tpl.id }}/toggle" class="inline">
+                                <button type="submit" class="text-xs ml-2 {% if tpl.is_active %}text-orange-600{% else %}text-green-600{% endif %}">{% if tpl.is_active %}O'chirish{% else %}Yoqish{% endif %}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Template yo'q - defaultlar avtomatik yaratiladi</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border">
+        <div class="p-4 border-b">
+            <h3 class="font-semibold">So'nggi yuborilganlar (log)</h3>
+        </div>
+        <div class="overflow-x-auto max-h-96">
+            <table class="w-full text-xs">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Vaqt</th>
+                        <th class="px-3 py-2 text-left">User ID</th>
+                        <th class="px-3 py-2 text-left">Template</th>
+                        <th class="px-3 py-2 text-left">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr class="border-b">
+                        <td class="px-3 py-2">{{ log.created_at.strftime('%d.%m %H:%M') if log.created_at else '' }}</td>
+                        <td class="px-3 py-2">{{ log.telegram_user_id }}</td>
+                        <td class="px-3 py-2">{{ log.template_id }}</td>
+                        <td class="px-3 py-2"><span class="px-2 py-1 rounded-full {% if log.status == 'sent' %}bg-green-100{% elif log.status == 'failed' %}bg-red-100{% else %}bg-yellow-100{% endif %}">{{ log.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

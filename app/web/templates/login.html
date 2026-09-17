@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - FOODERA Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-700 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+        <div class="text-center mb-8">
+            <div class="text-5xl mb-4">🔥</div>
+            <h1 class="text-3xl font-bold text-gray-900">FOODERA</h1>
+            <p class="text-gray-600">EXPO 2026 Admin Panel</p>
+        </div>
+
+        {% if error %}
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/admin/login" class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{{ t('username') }}</label>
+                <input type="text" name="username" required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
+                       placeholder="admin">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{{ t('password') }}</label>
+                <input type="password" name="password" required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
+                       placeholder="••••••••">
+            </div>
+            <button type="submit"
+                    class="w-full bg-gray-900 text-white py-3 rounded-lg font-medium hover:bg-black transition">
+                {{ t('login') }} →
+            </button>
+        </form>
+
+        <div class="mt-6 flex justify-center space-x-2">
+            <a href="/admin/lang/uz" class="px-4 py-2 rounded-lg text-sm {% if lang == 'uz' %}bg-gray-900 text-white{% else %}bg-gray-100 text-gray-700{% endif %}">🇺🇿 O'zbekcha</a>
+            <a href="/admin/lang/ru" class="px-4 py-2 rounded-lg text-sm {% if lang == 'ru' %}bg-gray-900 text-white{% else %}bg-gray-100 text-gray-700{% endif %}">🇷🇺 Русский</a>
+        </div>
+
+        <div class="mt-6 text-center text-xs text-gray-500">
+            Default: admin / admin<br>
+            Change in .env: ADMIN_PANEL_USERNAME / ADMIN_PANEL_PASSWORD
+        </div>
+    </div>
+</body>
+</html>

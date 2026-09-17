@@ -94,20 +94,25 @@ def command_list(language_code: str, settings: Settings) -> list[BotCommand]:
             command="help", description=t("btn.support", language_code).replace("❓ ", "")[:256]
         ),
     ]
-    if settings.admin_user_ids:
+    # Admin commands - visible for all if sales group configured (group members can use)
+    if settings.admin_user_ids or settings.sales_group_id:
         commands += [
-            BotCommand(command="stats", description="Leads overview"),
-            BotCommand(command="leads", description="Latest leads"),
-            BotCommand(command="hot", description="HOT leads"),
-            BotCommand(command="warm", description="WARM leads"),
-            BotCommand(command="today", description="Leads today"),
-            BotCommand(command="source", description="Source / campaign performance"),
+            BotCommand(command="stats", description="📊 Statistika / Leads overview"),
+            BotCommand(command="leads", description="📋 Leadlar / Latest leads"),
+            BotCommand(command="hot", description="🔥 HOT leadlar"),
+            BotCommand(command="warm", description="🌤 WARM leadlar"),
+            BotCommand(command="today", description="📅 Bugun / Today"),
+            BotCommand(command="source", description="📢 Manba / Source"),
+            BotCommand(command="export", description="📤 Eksport CSV"),
+            BotCommand(command="analytics", description="📈 Analitika batafsil"),
+            BotCommand(command="chat", description="💬 Lead bilan chat"),
+            BotCommand(command="chatid", description="🆔 Chat ID"),
         ]
     return commands
 
 
 async def setup_commands(bot: Bot, settings: Settings) -> None:
-    """Language-aware command menu for private chats; only /chatid-ish commands in groups."""
+    """Language-aware command menu for private chats; analytics commands in groups too."""
     for language_code in ("uz", "ru"):
         try:
             await bot.set_my_commands(
@@ -118,8 +123,18 @@ async def setup_commands(bot: Bot, settings: Settings) -> None:
         except Exception as exc:  # pragma: no cover - network
             logger.warning("could not set commands for %s: %s", language_code, type(exc).__name__)
     try:
+        group_commands = [
+            BotCommand(command="stats", description="📊 Statistika"),
+            BotCommand(command="leads", description="📋 Leadlar"),
+            BotCommand(command="hot", description="🔥 HOT"),
+            BotCommand(command="today", description="📅 Bugun"),
+            BotCommand(command="export", description="📤 Eksport"),
+            BotCommand(command="analytics", description="📈 Analitika"),
+            BotCommand(command="chatid", description="🆔 Chat ID"),
+            BotCommand(command="help", description="FOODERA EXPO 2026"),
+        ]
         await bot.set_my_commands(
-            [BotCommand(command="help", description="FOODERA EXPO 2026")],
+            group_commands,
             scope=BotCommandScopeAllGroupChats(),
         )
     except Exception as exc:  # pragma: no cover - network

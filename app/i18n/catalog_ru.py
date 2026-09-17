@@ -232,4 +232,12 @@ CATALOG: dict[str, str] = {
     "opt.relation.other": "Другое",
     "opt.field.website": "сайт",
     "opt.field.instagram": "Instagram",
+    "chat.received": "✅ Ваше сообщение получено! Менеджер скоро ответит.",
+    "chat.sent_to_lead": "✅ Отправлено {code}",
+    "chat.new_message": "💬 Новое сообщение: {code}",
+    "admin.export_done": "📊 Экспортировано {count} лидов",
+    "admin.broadcast_sent": "📢 Рассылка началась: будет отправлено {count} лидам",
+    "admin.chat_sent": "✅ Сообщение отправлено",
+    "info.no_active_form": "Нет активной анкеты. Нажмите /start чтобы начать",
+
 }

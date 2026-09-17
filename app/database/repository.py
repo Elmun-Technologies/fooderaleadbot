@@ -16,7 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import (
     BotUser,
+    Broadcast,
+    BroadcastStatus,
+    ChatDirection,
+    ChatMessage,
     Classification,
+    FollowUpLog,
+    FollowUpStatus,
+    FollowUpTemplate,
+    FollowUpTrigger,
     FunnelEvent,
     Lead,
     LeadEvent,
@@ -478,3 +486,393 @@ class LeadRepository:
             .limit(200)
         )
         return (await self.session.execute(stmt)).scalars().all()
+
+    # --------------------------------------------------------------- broadcasts
+    async def create_broadcast(self, **values: Any) -> Broadcast:
+        row = Broadcast(**values)
+        self.session.add(row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return row
+
+    async def get_broadcast(self, broadcast_id: int) -> Broadcast | None:
+        return await self.session.get(Broadcast, broadcast_id)
+
+    async def list_broadcasts(self, *, limit: int = 50, offset: int = 0) -> Sequence[Broadcast]:
+        result = await self.session.execute(
+            select(Broadcast).order_by(Broadcast.created_at.desc()).limit(limit).offset(offset)
+        )
+        return result.scalars().all()
+
+    async def update_broadcast(self, broadcast_id: int, **values: Any) -> Broadcast | None:
+        row = await self.session.get(Broadcast, broadcast_id)
+        if row is None:
+            return None
+        for k, v in values.items():
+            setattr(row, k, v)
+        await self.session.commit()
+        return row
+
+    async def count_broadcasts(self) -> int:
+        result = await self.session.execute(select(func.count()).select_from(Broadcast))
+        return int(result.scalar_one())
+
+    # --------------------------------------------------------------- chat
+    async def add_chat_message(self, **values: Any) -> ChatMessage:
+        row = ChatMessage(**values)
+        self.session.add(row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return row
+
+    async def list_chat_messages(
+        self, *, telegram_user_id: int | None = None, lead_id: int | None = None, limit: int = 100
+    ) -> Sequence[ChatMessage]:
+        stmt = select(ChatMessage).order_by(ChatMessage.created_at.asc())
+        if telegram_user_id is not None:
+            stmt = stmt.where(ChatMessage.telegram_user_id == telegram_user_id)
+        if lead_id is not None:
+            stmt = stmt.where(ChatMessage.lead_id == lead_id)
+        stmt = stmt.limit(limit)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def get_lead_by_notify_message(self, chat_id: int, message_id: int) -> Lead | None:
+        result = await self.session.execute(
+            select(Lead).where(Lead.notify_chat_id == chat_id, Lead.notify_message_id == message_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_chat_history(self, telegram_user_id: int, limit: int = 200) -> Sequence[ChatMessage]:
+        result = await self.session.execute(
+            select(ChatMessage)
+            .where(ChatMessage.telegram_user_id == telegram_user_id)
+            .order_by(ChatMessage.created_at.asc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def unread_chat_count(self) -> int:
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(ChatMessage)
+            .where(ChatMessage.direction == ChatDirection.INBOUND.value, ChatMessage.is_read.is_(False))
+        )
+        return int(result.scalar_one())
+
+    async def mark_chat_read(self, telegram_user_id: int) -> None:
+        await self.session.execute(
+            update(ChatMessage)
+            .where(
+                ChatMessage.telegram_user_id == telegram_user_id,
+                ChatMessage.direction == ChatDirection.INBOUND.value,
+                ChatMessage.is_read.is_(False),
+            )
+            .values(is_read=True)
+        )
+        await self.session.commit()
+
+    async def list_recent_chats(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        # latest message per user
+        subq = (
+            select(
+                ChatMessage.telegram_user_id,
+                func.max(ChatMessage.created_at).label("last_at"),
+                func.count().label("total"),
+                func.sum(case((ChatMessage.is_read.is_(False), 1), else_=0)).label("unread"),
+            )
+            .group_by(ChatMessage.telegram_user_id)
+            .subquery()
+        )
+        stmt = (
+            select(
+                subq.c.telegram_user_id,
+                subq.c.last_at,
+                subq.c.total,
+                subq.c.unread,
+                Lead.id.label("lead_id"),
+                Lead.lead_code,
+                Lead.company_name,
+                Lead.contact_name,
+                Lead.telegram_username,
+            )
+            .outerjoin(Lead, Lead.telegram_user_id == subq.c.telegram_user_id)
+            .order_by(subq.c.last_at.desc())
+            .limit(limit)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return [
+            {
+                "telegram_user_id": r.telegram_user_id,
+                "last_at": r.last_at,
+                "total": int(r.total or 0),
+                "unread": int(r.unread or 0),
+                "lead_id": r.lead_id,
+                "lead_code": r.lead_code,
+                "company_name": r.company_name,
+                "contact_name": r.contact_name,
+                "telegram_username": r.telegram_username,
+            }
+            for r in rows
+        ]
+
+    async def search_leads(
+        self, query: str, *, limit: int = 20
+    ) -> Sequence[Lead]:
+        like = f"%{query.strip()}%"
+        stmt = (
+            select(Lead)
+            .where(
+                or_(
+                    Lead.company_name.ilike(like),
+                    Lead.contact_name.ilike(like),
+                    Lead.phone.ilike(like),
+                    Lead.lead_code.ilike(like),
+                    Lead.telegram_username.ilike(like),
+                    Lead.telegram_first_name.ilike(like),
+                )
+            )
+            .order_by(Lead.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def export_leads(
+        self,
+        *,
+        classification: Sequence[str] | str | None = None,
+        lead_type: str | None = None,
+        since: datetime | None = None,
+        campaign: str | None = None,
+        source: str | None = None,
+        status: str | None = None,
+        only_completed: bool = False,
+    ) -> Sequence[Lead]:
+        conditions = self._lead_filters(
+            classification=classification,
+            lead_type=lead_type,
+            since=since,
+            campaign=campaign,
+            source=source,
+            status=status,
+            only_completed=only_completed,
+        )
+        stmt = select(Lead).order_by(Lead.created_at.desc())
+        for cond in conditions:
+            stmt = stmt.where(cond)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def leads_for_broadcast(self, broadcast: Broadcast) -> Sequence[Lead]:
+        conditions: list[Any] = [Lead.completed_at.is_not(None)]
+        if broadcast.filter_classification:
+            conditions.append(Lead.classification == broadcast.filter_classification)
+        if broadcast.filter_status:
+            conditions.append(Lead.lead_status == broadcast.filter_status)
+        if broadcast.filter_source:
+            conditions.append(Lead.source == broadcast.filter_source)
+        if broadcast.filter_campaign:
+            conditions.append(Lead.campaign == broadcast.filter_campaign)
+        if broadcast.filter_lead_type:
+            conditions.append(Lead.lead_type == broadcast.filter_lead_type)
+        if broadcast.filter_language:
+            conditions.append(Lead.language == broadcast.filter_language)
+        stmt = select(Lead).where(and_(*conditions)).order_by(Lead.id.asc())
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    # --------------------------------------------------------------- follow-ups
+    async def create_followup_template(self, **values: Any) -> FollowUpTemplate:
+        row = FollowUpTemplate(**values)
+        self.session.add(row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return row
+
+    async def get_followup_template(self, template_id: int) -> FollowUpTemplate | None:
+        return await self.session.get(FollowUpTemplate, template_id)
+
+    async def list_followup_templates(
+        self, *, only_active: bool = False, language: str | None = None
+    ) -> Sequence[FollowUpTemplate]:
+        stmt = select(FollowUpTemplate).order_by(FollowUpTemplate.priority.desc(), FollowUpTemplate.id.asc())
+        if only_active:
+            stmt = stmt.where(FollowUpTemplate.is_active.is_(True))
+        if language:
+            stmt = stmt.where(FollowUpTemplate.language == language)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def update_followup_template(self, template_id: int, **values: Any) -> FollowUpTemplate | None:
+        row = await self.session.get(FollowUpTemplate, template_id)
+        if row is None:
+            return None
+        for k, v in values.items():
+            setattr(row, k, v)
+        row.updated_at = utcnow()
+        await self.session.commit()
+        return row
+
+    async def delete_followup_template(self, template_id: int) -> bool:
+        row = await self.session.get(FollowUpTemplate, template_id)
+        if row is None:
+            return False
+        await self.session.delete(row)
+        await self.session.commit()
+        return True
+
+    async def get_due_followups(self, *, limit: int = 100) -> Sequence[FollowUpLog]:
+        now = utcnow()
+        stmt = (
+            select(FollowUpLog)
+            .where(FollowUpLog.status == FollowUpStatus.PENDING.value, FollowUpLog.scheduled_at <= now)
+            .order_by(FollowUpLog.scheduled_at.asc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def create_followup_log(self, **values: Any) -> FollowUpLog:
+        row = FollowUpLog(**values)
+        self.session.add(row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return row
+
+    async def has_followup_log(self, telegram_user_id: int, template_id: int) -> bool:
+        stmt = select(func.count()).select_from(FollowUpLog).where(
+            FollowUpLog.telegram_user_id == telegram_user_id, FollowUpLog.template_id == template_id
+        )
+        count = int((await self.session.execute(stmt)).scalar_one())
+        return count > 0
+
+    async def list_followup_logs(self, *, limit: int = 100, offset: int = 0) -> Sequence[FollowUpLog]:
+        stmt = (
+            select(FollowUpLog)
+            .order_by(FollowUpLog.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def count_followup_logs(self) -> int:
+        result = await self.session.execute(select(func.count()).select_from(FollowUpLog))
+        return int(result.scalar_one())
+
+    async def find_users_for_followup(self, template: FollowUpTemplate) -> Sequence[BotUser | Lead]:
+        """Find targets for a follow-up template based on trigger."""
+        trigger = template.trigger
+        delay = template.delay_hours or 1
+        cutoff = utcnow() - timedelta(hours=delay)
+
+        # Base query depends on trigger
+        if trigger == FollowUpTrigger.DRAFT_ABANDONED.value:
+            # Drafts that were updated before cutoff and still draft
+            stmt = select(Lead).where(
+                Lead.is_draft.is_(True),
+                Lead.updated_at <= cutoff,
+                Lead.language == template.language if template.language else True,
+            )
+            if template.filter_lead_type:
+                stmt = stmt.where(Lead.lead_type == template.filter_lead_type)
+            result = await self.session.execute(stmt.limit(500))
+            return result.scalars().all()
+
+        elif trigger == FollowUpTrigger.STARTED_NOT_COMPLETED.value:
+            # BotUsers who started but have no completed lead
+            # Find users with STARTED event before cutoff, but no COMPLETED
+            started_subq = (
+                select(LeadEvent.telegram_user_id)
+                .where(LeadEvent.event == FunnelEvent.STARTED.value, LeadEvent.created_at <= cutoff)
+                .distinct()
+                .subquery()
+            )
+            completed_subq = (
+                select(Lead.telegram_user_id).where(Lead.completed_at.is_not(None)).distinct().subquery()
+            )
+            stmt = (
+                select(BotUser)
+                .where(BotUser.telegram_user_id.in_(select(started_subq.c.telegram_user_id)))
+                .where(BotUser.telegram_user_id.not_in(select(completed_subq.c.telegram_user_id)))
+            )
+            if template.language:
+                stmt = stmt.where(BotUser.language == template.language)
+            result = await self.session.execute(stmt.limit(500))
+            return result.scalars().all()
+
+        elif trigger in (
+            FollowUpTrigger.COMPLETED_EXHIBITOR.value,
+            FollowUpTrigger.COMPLETED_VISITOR.value,
+            FollowUpTrigger.COMPLETED_PARTNER.value,
+            FollowUpTrigger.ALL_COMPLETED.value,
+        ):
+            type_map = {
+                FollowUpTrigger.COMPLETED_EXHIBITOR.value: LeadType.EXHIBITOR.value,
+                FollowUpTrigger.COMPLETED_VISITOR.value: LeadType.VISITOR.value,
+                FollowUpTrigger.COMPLETED_PARTNER.value: LeadType.PARTNER.value,
+            }
+            stmt = select(Lead).where(Lead.completed_at.is_not(None), Lead.completed_at <= cutoff)
+            if trigger in type_map:
+                stmt = stmt.where(Lead.lead_type == type_map[trigger])
+            if template.language:
+                stmt = stmt.where(Lead.language == template.language)
+            if template.filter_classification:
+                stmt = stmt.where(Lead.classification == template.filter_classification)
+            result = await self.session.execute(stmt.limit(500))
+            return result.scalars().all()
+
+        elif trigger in (
+            FollowUpTrigger.HOT_LEAD.value,
+            FollowUpTrigger.WARM_LEAD.value,
+            FollowUpTrigger.COLD_LEAD.value,
+        ):
+            cls_map = {
+                FollowUpTrigger.HOT_LEAD.value: Classification.HOT.value,
+                FollowUpTrigger.WARM_LEAD.value: Classification.WARM.value,
+                FollowUpTrigger.COLD_LEAD.value: [Classification.COLD.value, Classification.LOW.value],
+            }
+            stmt = select(Lead).where(Lead.completed_at.is_not(None), Lead.completed_at <= cutoff)
+            cls_filter = cls_map[trigger]
+            if isinstance(cls_filter, list):
+                stmt = stmt.where(Lead.classification.in_(cls_filter))
+            else:
+                stmt = stmt.where(Lead.classification == cls_filter)
+            if template.language:
+                stmt = stmt.where(Lead.language == template.language)
+            result = await self.session.execute(stmt.limit(500))
+            return result.scalars().all()
+
+        elif trigger == FollowUpTrigger.STATUS_NEW.value:
+            stmt = select(Lead).where(
+                Lead.completed_at.is_not(None),
+                Lead.lead_status == LeadStatus.NEW.value,
+                Lead.completed_at <= cutoff,
+            )
+            if template.language:
+                stmt = stmt.where(Lead.language == template.language)
+            result = await self.session.execute(stmt.limit(500))
+            return result.scalars().all()
+
+        else:
+            # Default: all completed
+            stmt = select(Lead).where(Lead.completed_at.is_not(None), Lead.completed_at <= cutoff)
+            result = await self.session.execute(stmt.limit(500))
+            return result.scalars().all()
+
+    async def schedule_followup_for_user(
+        self, template: FollowUpTemplate, telegram_user_id: int, lead_id: int | None, bot_user_id: int | None
+    ) -> FollowUpLog | None:
+        # Avoid duplicate
+        if await self.has_followup_log(telegram_user_id, template.id):
+            return None
+        scheduled_at = utcnow()  # already due (cutoff passed), send now
+        return await self.create_followup_log(
+            template_id=template.id,
+            lead_id=lead_id,
+            telegram_user_id=telegram_user_id,
+            bot_user_id=bot_user_id,
+            status=FollowUpStatus.PENDING.value,
+            scheduled_at=scheduled_at,
+        )
