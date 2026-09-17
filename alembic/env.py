@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.config import get_settings
+from app.database.db_url import prepare_database_url
 from app.database.models import Base
 
 config = context.config
@@ -30,7 +31,7 @@ if config.config_file_name is not None:
 settings = get_settings()
 # The settings object normalises the driver (`postgres://…` from a PaaS dashboard becomes
 # asyncpg), which is what makes migrations behave exactly like the running bot.
-database_url = settings.database_url
+database_url, connect_args = prepare_database_url(settings.database_url)
 # Alembic reads this through ConfigParser, so a `%` in a password must be doubled here.
 config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
@@ -72,6 +73,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
@@ -85,7 +87,9 @@ def run_migrations_online() -> None:
 
     from sqlalchemy import create_engine
 
-    connectable = create_engine(database_url, poolclass=pool.NullPool, future=True)
+    connectable = create_engine(
+            database_url, poolclass=pool.NullPool, future=True, connect_args=connect_args
+        )
     with connectable.connect() as connection:
         do_run_migrations(connection)
     connectable.dispose()

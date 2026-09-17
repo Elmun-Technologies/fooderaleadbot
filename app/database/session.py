@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import StaticPool
 
+from app.database.db_url import prepare_database_url
 from app.database.models import Base
 
 __all__ = ["Database", "create_database"]
@@ -41,12 +42,17 @@ class Database:
 
     @classmethod
     def from_url(cls, url: str, *, echo: bool = False) -> Database:
+        # `DATABASE_URL` from a PaaS dashboard carries libpq parameters that asyncpg has no
+        # keyword for (`?sslmode=disable`) - they become `connect_args` instead of a TypeError.
+        url, connect_args = prepare_database_url(url)
         kwargs: dict[str, object] = {"echo": echo, "future": True, "pool_pre_ping": True}
         if url.startswith("sqlite"):
             # a single shared connection keeps SQLite simple for local testing
-            kwargs["connect_args"] = {"check_same_thread": False}
+            connect_args["check_same_thread"] = False
             if ":memory:" in url or "mode=memory" in url:
                 kwargs["poolclass"] = StaticPool
+        if connect_args:
+            kwargs["connect_args"] = connect_args
         engine = create_async_engine(url, **kwargs)
 
         if engine.dialect.name == "sqlite":
