@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Follow-up {{ template.id }} - FOODERA{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <div class="flex items-center space-x-4">
+        <a href="/admin/followup" class="px-3 py-2 bg-white border rounded-lg text-sm">← Follow-up</a>
+        <h1 class="text-2xl font-bold">{{ template.name }}</h1>
+        {% if template.is_active %}<span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs">Faol</span>{% else %}<span class="bg-gray-100 px-3 py-1 rounded-full text-xs">Nofaol</span>{% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 space-y-6">
+            <div class="bg-white rounded-xl shadow-sm p-6 border">
+                <h3 class="font-semibold mb-4">Xabar</h3>
+                <div class="bg-gray-50 rounded-lg p-4 text-sm whitespace-pre-wrap">{{ template.text }}</div>
+                <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div><span class="text-gray-500">Trigger:</span> {{ template.trigger }}</div>
+                    <div><span class="text-gray-500">Delay:</span> {{ template.delay_hours }} soat</div>
+                    <div><span class="text-gray-500">Til:</span> {{ template.language.upper() }}</div>
+                    <div><span class="text-gray-500">Priority:</span> {{ template.priority }}</div>
+                    <div><span class="text-gray-500">Yuborilgan:</span> {{ template.total_sent }}</div>
+                    <div><span class="text-gray-500">Yaratilgan:</span> {{ template.created_at.strftime('%d.%m.%Y') if template.created_at else '' }}</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm p-6 border">
+                <h3 class="font-semibold mb-4">Tahrirlash</h3>
+                <form method="POST" action="/admin/followup/{{ template.id }}/edit" class="space-y-4">
+                    <input type="text" name="name" value="{{ template.name }}" required class="w-full px-3 py-2 border rounded-lg text-sm">
+                    <div class="grid grid-cols-3 gap-3">
+                        <select name="trigger" class="px-3 py-2 border rounded-lg text-sm">
+                            {% for tr in triggers %}
+                            <option value="{{ tr }}" {% if tr == template.trigger %}selected{% endif %}>{{ tr }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="number" name="delay_hours" value="{{ template.delay_hours }}" class="px-3 py-2 border rounded-lg text-sm">
+                        <select name="language" class="px-3 py-2 border rounded-lg text-sm">
+                            <option value="uz" {% if template.language == 'uz' %}selected{% endif %}>UZ</option>
+                            <option value="ru" {% if template.language == 'ru' %}selected{% endif %}>RU</option>
+                        </select>
+                    </div>
+                    <textarea name="text" rows="5" class="w-full px-3 py-2 border rounded-lg text-sm">{{ template.text }}</textarea>
+                    <div class="flex gap-2">
+                        <input type="number" name="priority" value="{{ template.priority }}" class="px-3 py-2 border rounded-lg text-sm w-24">
+                        <label class="flex items-center space-x-2 text-sm"><input type="checkbox" name="is_active" {% if template.is_active %}checked{% endif %}> <span>Faol</span></label>
+                    </div>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">Saqlash</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="bg-white rounded-xl shadow-sm p-6 border">
+                <h3 class="font-semibold mb-3">Targetlar ({{ total_targets }} ta)</h3>
+                <p class="text-xs text-gray-500 mb-3">Hozirda shartga mos keladigan foydalanuvchilar (faqat birinchi 50 ta)</p>
+                <div class="space-y-1 max-h-96 overflow-y-auto">
+                    {% for t in targets %}
+                    <div class="text-xs p-2 bg-gray-50 rounded">
+                        {% if t.telegram_user_id is defined %}{{ t.telegram_user_id }} - {{ t.username or '' }}
+                        {% else %}{{ t.telegram_user_id }} - {{ t.lead_code }} {{ t.company_name or '' }}{% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-xs text-gray-500">Hozircha mos foydalanuvchi yo'q</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm p-6 border">
+                <h3 class="font-semibold mb-3">Amallar</h3>
+                <div class="space-y-2">
+                    <form method="POST" action="/admin/followup/{{ template.id }}/toggle">
+                        <button type="submit" class="w-full px-4 py-2 {% if template.is_active %}bg-orange-100 text-orange-800{% else %}bg-green-100 text-green-800{% endif %} rounded-lg text-sm">
+                            {% if template.is_active %}O'chirish{% else %}Yoqish{% endif %}
+                        </button>
+                    </form>
+                    <form method="POST" action="/admin/followup/{{ template.id }}/delete" onsubmit="return confirm('O\'chirishni tasdiqlaysizmi?')">
+                        <button type="submit" class="w-full px-4 py-2 bg-red-100 text-red-800 rounded-lg text-sm">O'chirish</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

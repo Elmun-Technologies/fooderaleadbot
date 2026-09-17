@@ -26,6 +26,10 @@ __all__ = [
     "ChatDirection",
     "ChatMessage",
     "Classification",
+    "FollowUpLog",
+    "FollowUpStatus",
+    "FollowUpTemplate",
+    "FollowUpTrigger",
     "FunnelEvent",
     "Lead",
     "LeadEvent",
@@ -84,6 +88,27 @@ class BroadcastStatus(StrEnum):
 class ChatDirection(StrEnum):
     INBOUND = "inbound"  # from lead to admin
     OUTBOUND = "outbound"  # from admin to lead
+
+
+class FollowUpTrigger(StrEnum):
+    DRAFT_ABANDONED = "draft_abandoned"  # started but not finished
+    STARTED_NOT_COMPLETED = "started_not_completed"  # /start but no lead
+    COMPLETED_EXHIBITOR = "completed_exhibitor"
+    COMPLETED_VISITOR = "completed_visitor"
+    COMPLETED_PARTNER = "completed_partner"
+    HOT_LEAD = "hot_lead"
+    WARM_LEAD = "warm_lead"
+    COLD_LEAD = "cold_lead"
+    STATUS_NEW = "status_new"  # still NEW after X hours
+    STATUS_CONTACTED = "status_contacted"
+    ALL_COMPLETED = "all_completed"
+
+
+class FollowUpStatus(StrEnum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+    SKIPPED = "skipped"
 
 
 class FunnelEvent(StrEnum):
@@ -380,3 +405,77 @@ class ChatMessage(Base):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<ChatMessage id={self.id} user={self.telegram_user_id} dir={self.direction}>"
+
+
+class FollowUpTemplate(Base):
+    """Marketing follow-up template - proactive messages inside bot."""
+
+    __tablename__ = "followup_templates"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128))
+    trigger: Mapped[str] = mapped_column(String(32), index=True)  # FollowUpTrigger
+    delay_hours: Mapped[int] = mapped_column(Integer, default=1)  # after trigger
+    language: Mapped[str] = mapped_column(String(8), default="uz", server_default="uz")
+
+    text: Mapped[str] = mapped_column(Text, default="")
+    photo_file_id: Mapped[str | None] = mapped_column(String(255))
+    document_file_id: Mapped[str | None] = mapped_column(String(255))
+    document_name: Mapped[str | None] = mapped_column(String(255))
+
+    # targeting filters
+    filter_classification: Mapped[str | None] = mapped_column(String(32))
+    filter_lead_type: Mapped[str | None] = mapped_column(String(16))
+    filter_source: Mapped[str | None] = mapped_column(String(32))
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    priority: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # higher first
+
+    # tracking
+    total_sent: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    logs: Mapped[list[FollowUpLog]] = relationship(back_populates="template", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_followup_templates_trigger_active", "trigger", "is_active"),
+        Index("ix_followup_templates_lang_active", "language", "is_active"),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<FollowUpTemplate id={self.id} trigger={self.trigger} lang={self.language} delay={self.delay_hours}h>"
+
+
+class FollowUpLog(Base):
+    """Log of sent follow-ups to avoid duplicate spam."""
+
+    __tablename__ = "followup_logs"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    template_id: Mapped[int] = mapped_column(
+        BigInt, ForeignKey("followup_templates.id", ondelete="CASCADE"), index=True
+    )
+    lead_id: Mapped[int | None] = mapped_column(
+        BigInt, ForeignKey("leads.id", ondelete="SET NULL"), index=True
+    )
+    telegram_user_id: Mapped[int] = mapped_column(BigInt, index=True)
+    bot_user_id: Mapped[int | None] = mapped_column(BigInt, ForeignKey("bot_users.id", ondelete="SET NULL"))
+
+    status: Mapped[str] = mapped_column(String(16), default=FollowUpStatus.PENDING.value)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(String(255))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    template: Mapped[FollowUpTemplate] = relationship(back_populates="logs")
+    lead: Mapped[Lead | None] = relationship(backref="followup_logs")
+
+    __table_args__ = (
+        Index("ix_followup_logs_user_template", "telegram_user_id", "template_id", unique=True),
+        Index("ix_followup_logs_scheduled_status", "scheduled_at", "status"),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<FollowUpLog template={self.template_id} user={self.telegram_user_id} status={self.status}>"

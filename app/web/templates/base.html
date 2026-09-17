@@ -38,6 +38,9 @@
                         <a href="/admin/chat" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/chat' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
                             <i class="fas fa-comments mr-1"></i> {{ t('chat') }}
                         </a>
+                        <a href="/admin/followup" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/followup' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
+                            <i class="fas fa-robot mr-1"></i> Follow-up
+                        </a>
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">
@@ -61,6 +64,7 @@
                 <a href="/admin/analytics" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/analytics' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 bg-gray-100{% endif %}">{{ t('analytics') }}</a>
                 <a href="/admin/broadcast" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/broadcast' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 bg-gray-100{% endif %}">{{ t('broadcast') }}</a>
                 <a href="/admin/chat" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/chat' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 bg-gray-100{% endif %}">{{ t('chat') }}</a>
+                <a href="/admin/followup" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/followup' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 bg-gray-100{% endif %}">Follow-up</a>
             </div>
         </div>
     </nav>

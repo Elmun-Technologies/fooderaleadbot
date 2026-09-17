@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Create Follow-up - FOODERA{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <div class="flex items-center space-x-4">
+        <a href="/admin/followup" class="px-3 py-2 bg-white border rounded-lg text-sm">← Follow-up</a>
+        <h1 class="text-2xl font-bold">Yangi Follow-up Template</h1>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-6 border">
+        <form method="POST" action="/admin/followup/create" enctype="multipart/form-data" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Nomi *</label>
+                    <input type="text" name="name" required placeholder="Masalan: Draft 2h UZ" class="w-full px-4 py-2 border rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Trigger *</label>
+                    <select name="trigger" required class="w-full px-4 py-2 border rounded-lg text-sm">
+                        {% for tr in triggers %}
+                        <option value="{{ tr }}">{{ tr }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Kechikish (soat) *</label>
+                    <input type="number" name="delay_hours" required value="2" min="0" max="720" class="w-full px-4 py-2 border rounded-lg text-sm">
+                    <p class="text-xs text-gray-500 mt-1">0 = darhol, 24 = 1 kundan keyin</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Til *</label>
+                    <select name="language" required class="w-full px-4 py-2 border rounded-lg text-sm">
+                        <option value="uz">UZ - O'zbekcha</option>
+                        <option value="ru">RU - Русский</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Priority</label>
+                    <input type="number" name="priority" value="0" class="w-full px-4 py-2 border rounded-lg text-sm">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2">Xabar matni *</label>
+                <textarea name="text" rows="6" required placeholder="Marketing xabarini yozing..." class="w-full px-4 py-3 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                <p class="text-xs text-gray-500 mt-1">Bot orqali yuboriladi, emoji va /start ishlatishingiz mumkin</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">📷 Rasm</label>
+                    <input type="file" name="photo" accept="image/*" class="w-full px-3 py-2 border rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">📎 File</label>
+                    <input type="file" name="document" class="w-full px-3 py-2 border rounded-lg text-sm">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Filtr: Classification</label>
+                    <select name="filter_classification" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <option value="">Barchasi</option>
+                        <option value="HOT">HOT</option>
+                        <option value="WARM">WARM</option>
+                        <option value="COLD">COLD</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Filtr: Lead Type</label>
+                    <select name="filter_lead_type" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        <option value="">Barchasi</option>
+                        <option value="exhibitor">exhibitor</option>
+                        <option value="visitor">visitor</option>
+                        <option value="partner">partner</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <input type="checkbox" name="is_active" id="is_active" checked class="rounded">
+                <label for="is_active" class="text-sm font-medium">Faol (darhol ishlasin)</label>
+            </div>
+
+            <button type="submit" class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">
+                <i class="fas fa-plus mr-2"></i>Yaratish
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

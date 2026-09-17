@@ -46,6 +46,8 @@ async def dashboard_page(
     unread = await repo.unread_chat_count()
     recent_chats = await repo.list_recent_chats(limit=10)
     recent_leads = await repo.list_leads(limit=10)
+    followup_templates = await repo.list_followup_templates()
+    followup_logs_count = await repo.count_followup_logs()
 
     completion = round(100.0 * total_completed / starts, 1) if starts else 0.0
 
@@ -72,5 +74,7 @@ async def dashboard_page(
             "recent_chats": recent_chats,
             "recent_leads": recent_leads,
             "completion": completion,
+            "followup_templates": len(followup_templates),
+            "followup_logs": followup_logs_count,
         },
     )

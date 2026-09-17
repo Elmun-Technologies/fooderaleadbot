@@ -77,6 +77,7 @@ async def run() -> int:
 
     database = create_database(settings.database_url, echo=settings.sql_echo)
     web_task = None
+    followup_task = None
     try:
         if settings.auto_create_tables:
             await database.create_schema()
@@ -88,6 +89,18 @@ async def run() -> int:
 
         async def _on_startup(bot: Bot, dispatcher: Dispatcher) -> None:
             await setup_commands(bot, settings)
+            # Ensure default follow-up templates exist
+            try:
+                from app.database.repository import LeadRepository
+                from app.services.followup_service import FollowUpService
+
+                async with database.session() as session:
+                    repo = LeadRepository(session)
+                    service = FollowUpService(bot, repo)
+                    await service.ensure_default_templates()
+                    logger.info("follow-up templates ensured")
+            except Exception as exc:
+                logger.warning("could not ensure follow-up templates: %s", exc)
 
         dispatcher.startup.register(_on_startup)
 
@@ -103,9 +116,6 @@ async def run() -> int:
                 import uvicorn
 
                 set_bot_instance(bot)
-
-                # Set database for web
-                from app.web.deps import _db as _web_db_module
 
                 import app.web.deps as web_deps
 
@@ -133,6 +143,34 @@ async def run() -> int:
             except Exception as exc:
                 logger.warning("could not start admin panel: %s", exc)
 
+        # Start follow-up marketing scheduler
+        async def _run_followup_scheduler():
+            logger.info("starting follow-up marketing scheduler (every 5 min)")
+            await asyncio.sleep(10)  # initial delay
+            while True:
+                try:
+                    from app.database.repository import LeadRepository
+                    from app.services.followup_service import FollowUpService
+
+                    async with database.session() as session:
+                        repo = LeadRepository(session)
+                        service = FollowUpService(bot, repo)
+                        # Ensure defaults
+                        await service.ensure_default_templates()
+                        scheduled = await service.schedule_due_followups()
+                        if scheduled:
+                            logger.info("scheduled %s follow-ups", scheduled)
+                        sent, failed = await service.send_due_followups(limit=100)
+                        if sent or failed:
+                            logger.info("follow-up sent=%s failed=%s", sent, failed)
+                except asyncio.CancelledError:
+                    break
+                except Exception as exc:
+                    logger.warning("follow-up scheduler error: %s", exc)
+                await asyncio.sleep(300)  # 5 minutes
+
+        followup_task = asyncio.create_task(_run_followup_scheduler())
+
         await dispatcher.start_polling(
             bot,
             allowed_updates=dispatcher.resolve_used_update_types(),
@@ -159,6 +197,12 @@ async def run() -> int:
         logger.error("startup failed: %s", exc)
         return 3
     finally:
+        if followup_task:
+            followup_task.cancel()
+            try:
+                await followup_task
+            except asyncio.CancelledError:
+                pass
         if web_task:
             web_task.cancel()
             try:
