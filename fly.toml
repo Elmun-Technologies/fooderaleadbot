@@ -1,11 +1,7 @@
 # FOODERA EXPO 2026 lead bot on Fly.io.
 #
-# `fly launch` fills in the app name and may rewrite a few defaults on the first run -
-# commit whatever it produces and keep the rest of this file.
-#
-# The bot is a *worker*: it only makes outbound HTTPS calls to Telegram, so there is no
-# [[services]] block, no HTTP port and no public IP. That is intentional - the only
-# secret in this project (BOT_TOKEN) has nothing listening for it.
+# Bot + Admin Panel: bot does long polling, admin panel serves HTTP on 8080.
+# Both run in the same process (app.main starts web server + polling).
 
 app = 'foodera-leadbot'   # change to your own globally unique name
 primary_region = 'fra'    # closest region to Uzbekistan; 'sin' or 'bom' work too
@@ -15,23 +11,23 @@ primary_region = 'fra'    # closest region to Uzbekistan; 'sin' or 'bom' work to
 
 [env]
   LOG_LEVEL = "INFO"
-  LOG_JSON = "true"             # one JSON object per line: `fly logs` stays greppable
+  LOG_JSON = "true"
   DISPLAY_TIMEZONE = "Asia/Tashkent"
-  AUTO_CREATE_TABLES = "false"  # the release_command below migrates instead
+  AUTO_CREATE_TABLES = "false"
+  ADMIN_PANEL_ENABLED = "true"
+  ADMIN_PANEL_HOST = "0.0.0.0"
+  ADMIN_PANEL_PORT = "8080"
 
 # BOT_TOKEN, SALES_GROUP_ID, ADMIN_USER_IDS, DATABASE_URL and friends are secrets:
 # set them with `fly secrets set ...` (see README "Deploy to Fly.io"), never here.
+# Also set ADMIN_PANEL_USERNAME and ADMIN_PANEL_PASSWORD for web panel.
 
 [processes]
   app = "python -m app.main"
 
 [deploy]
-  # Schema first: if the migration fails, the deploy is aborted and the old machine keeps running.
   release_command = "alembic upgrade head"
   strategy = "rolling_machines"
-
-  # Long polling only receives updates while a machine runs. Autostopping would silently
-  # drop leads during the quiet hours, so the bot must never be suspended.
   auto_stop_machines = false
   min_machines_running = 1
 
@@ -40,7 +36,30 @@ primary_region = 'fra'    # closest region to Uzbekistan; 'sin' or 'bom' work to
 
 [[vm]]
   size = 'shared-cpu-1x'
-  memory = '256mb'
+  memory = '512mb'
+
+# HTTP service for admin panel (Fly.io will route public traffic to 8080)
+[[services]]
+  protocol = "tcp"
+  internal_port = 8080
+  processes = ["app"]
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
 
 # Optional: a persistent volume so the bot can run on SQLite instead of Postgres
 # (fine for one expo campaign, not for anything you cannot afford to lose):

@@ -237,4 +237,12 @@ CATALOG: dict[str, str] = {
     "opt.relation.other": "Boshqa",
     "opt.field.website": "Sayt",
     "opt.field.instagram": "Instagram",
+    "chat.received": "✅ Xabaringiz qabul qilindi! Menejerimiz tez orada javob beradi.",
+    "chat.sent_to_lead": "✅ {code} ga yuborildi",
+    "chat.new_message": "💬 Yangi xabar: {code}",
+    "admin.export_done": "📊 {count} ta lead export qilindi",
+    "admin.broadcast_sent": "📢 Rassilka boshlandi: {count} ta leadga yuboriladi",
+    "admin.chat_sent": "✅ Xabar yuborildi",
+    "info.no_active_form": "Aktiv so'rovnoma yo'q. Boshlash uchun /start bosing",
+
 }

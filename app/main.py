@@ -64,6 +64,7 @@ async def run() -> int:
             "sales_group": settings.sales_group_id,
             "admins": len(settings.admin_user_ids),
             "default_language": settings.default_language,
+            "admin_panel": settings.admin_panel_enabled,
             "thresholds": {
                 "hot": settings.hot_min_score,
                 "warm": settings.warm_min_score,
@@ -75,6 +76,7 @@ async def run() -> int:
     validate_settings(settings)
 
     database = create_database(settings.database_url, echo=settings.sql_echo)
+    web_task = None
     try:
         if settings.auto_create_tables:
             await database.create_schema()
@@ -93,6 +95,43 @@ async def run() -> int:
             await database.dispose()
 
         dispatcher.shutdown.register(_on_shutdown)
+
+        # Start admin panel if enabled
+        if settings.admin_panel_enabled:
+            try:
+                from app.web.app import app as web_app, set_bot_instance
+                import uvicorn
+
+                set_bot_instance(bot)
+
+                # Set database for web
+                from app.web.deps import _db as _web_db_module
+
+                import app.web.deps as web_deps
+
+                web_deps._db = database
+
+                config = uvicorn.Config(
+                    web_app,
+                    host=settings.admin_panel_host,
+                    port=settings.admin_panel_port,
+                    log_level="info",
+                    access_log=False,
+                )
+                server = uvicorn.Server(config)
+
+                async def _run_web():
+                    logger.info(
+                        "starting admin panel on %s:%s",
+                        settings.admin_panel_host,
+                        settings.admin_panel_port,
+                    )
+                    await server.serve()
+
+                web_task = asyncio.create_task(_run_web())
+                logger.info("admin panel enabled at http://%s:%s/admin", settings.admin_panel_host, settings.admin_panel_port)
+            except Exception as exc:
+                logger.warning("could not start admin panel: %s", exc)
 
         await dispatcher.start_polling(
             bot,
@@ -120,6 +159,12 @@ async def run() -> int:
         logger.error("startup failed: %s", exc)
         return 3
     finally:
+        if web_task:
+            web_task.cancel()
+            try:
+                await web_task
+            except asyncio.CancelledError:
+                pass
         await database.dispose()
         logger.info("bot stopped")
 

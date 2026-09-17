@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FOODERA Admin{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navbar -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="/admin/dashboard" class="flex items-center space-x-2">
+                        <span class="text-2xl">🔥</span>
+                        <span class="font-bold text-xl text-gray-900">FOODERA</span>
+                        <span class="text-sm text-gray-500 hidden sm:inline">EXPO 2026</span>
+                    </a>
+                    <div class="hidden md:ml-10 md:flex md:space-x-4">
+                        <a href="/admin/dashboard" class="px-3 py-2 rounded-md text-sm font-medium {% if request.url.path == '/admin/dashboard' %}bg-gray-900 text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
+                            <i class="fas fa-chart-line mr-1"></i> {{ t('dashboard') }}
+                        </a>
+                        <a href="/admin/leads" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/leads' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
+                            <i class="fas fa-users mr-1"></i> {{ t('leads') }}
+                        </a>
+                        <a href="/admin/analytics" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/analytics' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
+                            <i class="fas fa-chart-pie mr-1"></i> {{ t('analytics') }}
+                        </a>
+                        <a href="/admin/broadcast" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/broadcast' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
+                            <i class="fas fa-bullhorn mr-1"></i> {{ t('broadcast') }}
+                        </a>
+                        <a href="/admin/chat" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/chat' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %}">
+                            <i class="fas fa-comments mr-1"></i> {{ t('chat') }}
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <!-- Language switcher -->
+                    <div class="flex rounded-md overflow-hidden border">
+                        <a href="/admin/lang/uz" class="px-3 py-1 text-sm {% if lang == 'uz' %}bg-gray-900 text-white{% else %}bg-white text-gray-700{% endif %}">UZ</a>
+                        <a href="/admin/lang/ru" class="px-3 py-1 text-sm {% if lang == 'ru' %}bg-gray-900 text-white{% else %}bg-white text-gray-700{% endif %}">RU</a>
+                    </div>
+                    <span class="text-sm text-gray-600 hidden sm:inline">{{ user }}</span>
+                    <a href="/admin/logout" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-sign-out-alt"></i> {{ t('logout') }}
+                    </a>
+                </div>
+            </div>
+        </div>
+        <!-- Mobile menu -->
+        <div class="md:hidden border-t bg-white">
+            <div class="px-2 pt-2 pb-3 space-y-1 flex flex-wrap gap-1">
+                <a href="/admin/dashboard" class="px-3 py-2 rounded-md text-sm font-medium {% if request.url.path == '/admin/dashboard' %}bg-gray-900 text-white{% else %}text-gray-700 bg-gray-100{% endif %}">{{ t('dashboard') }}</a>
+                <a href="/admin/leads" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/leads' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 bg-gray-100{% endif %}">{{ t('leads') }}</a>
+                <a href="/admin/analytics" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/analytics' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 bg-gray-100{% endif %}">{{ t('analytics') }}</a>
+                <a href="/admin/broadcast" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/broadcast' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 bg-gray-100{% endif %}">{{ t('broadcast') }}</a>
+                <a href="/admin/chat" class="px-3 py-2 rounded-md text-sm font-medium {% if '/admin/chat' in request.url.path %}bg-gray-900 text-white{% else %}text-gray-700 bg-gray-100{% endif %}">{{ t('chat') }}</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="mt-10 border-t bg-white">
+        <div class="max-w-7xl mx-auto px-4 py-4 text-center text-sm text-gray-500">
+            FOODERA EXPO 2026 • Admin Panel • {{ lang.upper() }}
+        </div>
+    </footer>
+</body>
+</html>

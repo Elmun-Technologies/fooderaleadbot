@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Create Broadcast - FOODERA{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <div class="flex items-center space-x-4">
+        <a href="/admin/broadcast" class="px-3 py-2 bg-white border rounded-lg text-sm">← {{ t('broadcast') }}</a>
+        <h1 class="text-2xl font-bold">{{ t('create_broadcast') }}</h1>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-6 border">
+        <form method="POST" action="/admin/broadcast/create" enctype="multipart/form-data" class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium mb-2">{{ t('broadcast_text') }} *</label>
+                <textarea name="text" rows="6" required placeholder="Xabar matnini yozing... 2 tilda bo'lishi mumkin" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+                <p class="text-xs text-gray-500 mt-1">HTML qo'llab-quvvatlanmaydi, oddiy matn. Emoji ishlatishingiz mumkin 🔥</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">📷 {{ t('photo') }} (ixtiyoriy)</label>
+                    <input type="file" name="photo" accept="image/*" class="w-full px-3 py-2 border rounded-lg text-sm">
+                    <p class="text-xs text-gray-500 mt-1">JPG, PNG - 20MB gacha</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">📎 {{ t('file') }} (ixtiyoriy)</label>
+                    <input type="file" name="document" class="w-full px-3 py-2 border rounded-lg text-sm">
+                    <p class="text-xs text-gray-500 mt-1">PDF, DOC, etc - 50MB gacha</p>
+                </div>
+            </div>
+
+            <div class="border-t pt-6">
+                <h3 class="font-semibold mb-4">{{ t('filter') }} (ixtiyoriy - bo'sh qoldirilsa barchaga yuboriladi)</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">{{ t('classification') }}</label>
+                        <select name="filter_classification" class="w-full px-3 py-2 border rounded-lg text-sm">
+                            <option value="">{{ t('all') }}</option>
+                            <option value="HOT">HOT</option>
+                            <option value="WARM">WARM</option>
+                            <option value="COLD">COLD</option>
+                            <option value="LOW">LOW</option>
+                            <option value="VISITOR">VISITOR</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">{{ t('status') }}</label>
+                        <select name="filter_status" class="w-full px-3 py-2 border rounded-lg text-sm">
+                            <option value="">{{ t('all') }}</option>
+                            <option value="NEW">NEW</option>
+                            <option value="CONTACTED">CONTACTED</option>
+                            <option value="NEGOTIATION">NEGOTIATION</option>
+                            <option value="BOOKED">BOOKED</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">{{ t('source') }}</label>
+                        <select name="filter_source" class="w-full px-3 py-2 border rounded-lg text-sm">
+                            <option value="">{{ t('all') }}</option>
+                            <option value="direct">direct</option>
+                            <option value="telegram">telegram</option>
+                            <option value="tgads">tgads</option>
+                            <option value="instagram">instagram</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Lead turi</label>
+                        <select name="filter_lead_type" class="w-full px-3 py-2 border rounded-lg text-sm">
+                            <option value="">{{ t('all') }}</option>
+                            <option value="exhibitor">exhibitor</option>
+                            <option value="visitor">visitor</option>
+                            <option value="partner">partner</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">{{ t('language') }}</label>
+                        <select name="filter_language" class="w-full px-3 py-2 border rounded-lg text-sm">
+                            <option value="">{{ t('all') }}</option>
+                            <option value="uz">UZ</option>
+                            <option value="ru">RU</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <input type="checkbox" name="send_now" id="send_now" class="rounded">
+                <label for="send_now" class="text-sm font-medium">Yaratish bilan yuborishni boshlash</label>
+            </div>
+
+            <div class="flex gap-3">
+                <button type="submit" class="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">
+                    <i class="fas fa-plus mr-2"></i>Yaratish
+                </button>
+                <a href="/admin/broadcast" class="px-6 py-3 bg-gray-100 rounded-lg font-medium hover:bg-gray-200">Bekor qilish</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+        <h4 class="font-semibold text-yellow-900 mb-2">⚠️ Muhim</h4>
+        <ul class="text-sm text-yellow-800 space-y-1 list-disc list-inside">
+            <li>Rasm va fayl Telegram orqali yuboriladi, shuning uchun avval sales guruhga vaqtincha xabar yuboriladi va o'chiriladi (file_id olish uchun)</li>
+            <li>2 tilda yubormoqchi bo'lsangiz, 2 ta alohida rassilka yarating: biri UZ, biri RU</li>
+            <li>Yuborish sekin amalga oshadi (spam oldini olish uchun 0.05 soniya kutish)</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

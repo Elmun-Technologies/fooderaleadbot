@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Broadcast #{{ broadcast.id }} - FOODERA{% endblock %}
+{% block content %}
+<div class="space-y-6 max-w-4xl mx-auto">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+            <a href="/admin/broadcast" class="px-3 py-2 bg-white border rounded-lg text-sm">← {{ t('broadcast') }}</a>
+            <h1 class="text-2xl font-bold">Broadcast #{{ broadcast.id }}</h1>
+        </div>
+        {% if broadcast.status != 'SENDING' %}
+        <form method="POST" action="/admin/broadcast/{{ broadcast.id }}/send">
+            <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
+                <i class="fas fa-paper-plane mr-1"></i> Yuborishni boshlash
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="md:col-span-2 bg-white rounded-xl shadow-sm p-6 border">
+            <h3 class="font-semibold mb-3">{{ t('broadcast_text') }}</h3>
+            <div class="bg-gray-50 rounded-lg p-4 text-sm whitespace-pre-wrap">{{ broadcast.text }}</div>
+            
+            {% if broadcast.photo_file_id %}
+            <div class="mt-4">
+                <p class="text-sm font-medium mb-2">📷 Rasm biriktirilgan: {{ broadcast.photo_file_id[:20] }}...</p>
+            </div>
+            {% endif %}
+            {% if broadcast.document_file_id %}
+            <div class="mt-2">
+                <p class="text-sm font-medium">📎 Fayl biriktirilgan: {{ broadcast.document_name or broadcast.document_file_id[:20] }}</p>
+            </div>
+            {% endif %}
+
+            <div class="mt-6 grid grid-cols-2 gap-4 text-sm">
+                <div><span class="text-gray-500">Status:</span> <span class="font-medium">{{ broadcast.status }}</span></div>
+                <div><span class="text-gray-500">Yaratuvchi:</span> <span class="font-medium">@{{ broadcast.created_by_username or '-' }}</span></div>
+                <div><span class="text-gray-500">Jami:</span> <span class="font-medium">{{ broadcast.total_count }}</span></div>
+                <div><span class="text-gray-500">Yuborildi:</span> <span class="font-medium text-green-600">{{ broadcast.sent_count }}</span></div>
+                <div><span class="text-gray-500">Xatolik:</span> <span class="font-medium text-red-600">{{ broadcast.failed_count }}</span></div>
+                <div><span class="text-gray-500">Sana:</span> <span class="font-medium">{{ broadcast.created_at.strftime('%d.%m.%Y %H:%M') if broadcast.created_at else '' }}</span></div>
+            </div>
+
+            {% if broadcast.filter_classification or broadcast.filter_status or broadcast.filter_source %}
+            <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p class="text-sm font-medium text-blue-900">Filtrlar:</p>
+                <p class="text-xs text-blue-800">
+                    {% if broadcast.filter_classification %}Classification: {{ broadcast.filter_classification }} {% endif %}
+                    {% if broadcast.filter_status %}Status: {{ broadcast.filter_status }} {% endif %}
+                    {% if broadcast.filter_source %}Source: {{ broadcast.filter_source }} {% endif %}
+                    {% if broadcast.filter_lead_type %}Type: {{ broadcast.filter_lead_type }} {% endif %}
+                    {% if broadcast.filter_language %}Lang: {{ broadcast.filter_language }} {% endif %}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 border">
+            <h3 class="font-semibold mb-3">Progress</h3>
+            {% if broadcast.total_count > 0 %}
+            <div class="w-full bg-gray-200 rounded-full h-4 mb-2">
+                <div class="bg-blue-600 h-4 rounded-full" style="width: {{ (broadcast.sent_count / broadcast.total_count * 100) | int }}%"></div>
+            </div>
+            <p class="text-sm text-gray-600">{{ broadcast.sent_count }} / {{ broadcast.total_count }} ({{ (broadcast.sent_count / broadcast.total_count * 100) | int }}%)</p>
+            {% else %}
+            <p class="text-sm text-gray-500">Hali hisoblanmagan</p>
+            {% endif %}
+
+            <div class="mt-6">
+                <h4 class="font-medium text-sm mb-2">Targetlar (birinchi 100 ta)</h4>
+                <div class="space-y-1 max-h-96 overflow-y-auto">
+                    {% for lead in leads %}
+                    <div class="text-xs p-2 bg-gray-50 rounded flex justify-between">
+                        <span>{{ lead.lead_code }} {{ lead.company_name or lead.contact_name }}</span>
+                        <span class="text-gray-500">{{ lead.telegram_user_id }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Jami: {{ total_targets }} ta</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

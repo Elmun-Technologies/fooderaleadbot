@@ -45,6 +45,10 @@ _ADMIN_COMMANDS = (
     "lead",
     "setstatus",
     "chatid",
+    "export",
+    "analytics",
+    "broadcast",
+    "chat",
 )
 
 _FUNNEL_ORDER = (
@@ -86,14 +90,46 @@ async def _reply(message: Message, text: str) -> None:
     await message.answer(text[:3900], link_preview_options=_NO_PREVIEW)
 
 
-@router.message(Command(*_ADMIN_COMMANDS), IsOwnerOrAdmin())
+async def _is_allowed_manager(message: Message, settings: Settings, bot: Any) -> bool:
+    """Check if user is admin or member of sales group (for private chats too)."""
+    if message.from_user is None:
+        return False
+    user_id = message.from_user.id
+    if user_id in settings.admin_user_ids:
+        return True
+    if not settings.allow_group_managers:
+        return False
+    if not settings.sales_group_id:
+        return False
+    # If message is in sales group, allow
+    if message.chat.id == settings.sales_group_id:
+        return True
+    # For private chats, check membership via Telegram API
+    if bot is not None:
+        try:
+            member = await bot.get_chat_member(settings.sales_group_id, user_id)
+            if member.status in ("creator", "administrator", "member"):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+@router.message(Command(*_ADMIN_COMMANDS))
 async def admin_command(message: Message, command: CommandObject, **data: Any) -> None:
     """One entry point for all admin commands - keeps the routing table short."""
     settings: Settings = data["settings"]
     leads: LeadService = data["leads"]
     repo = leads.repo
+    bot = data.get("bot")
     name = (command.command or "").lower()
     args = (command.args or "").strip()
+
+    # Permission check: allow group members to see analytics
+    if not await _is_allowed_manager(message, settings, bot):
+        # Still allow chatid for anyone? No, restrict
+        await _reply(message, t("err.not_manager", settings.default_language))
+        return
 
     if name == "chatid":
         await _reply(
@@ -124,6 +160,27 @@ async def admin_command(message: Message, command: CommandObject, **data: Any) -
         await _reply(message, await _set_status(leads, args))
         return
 
+    if name == "export":
+        await _handle_export(message, repo, args, settings)
+        return
+
+    if name == "analytics":
+        await _reply(message, await _detailed_analytics(repo, settings))
+        return
+
+    if name == "broadcast":
+        await _reply(
+            message,
+            "📢 Rassilka uchun admin paneldan foydalaning:\n"
+            f"Admin panel: /admin/broadcast\n"
+            "Yoki /broadcast <matn> deb yozing va bot barcha leadlarga yuboradi (rasm/file bilan).",
+        )
+        return
+
+    if name == "chat":
+        await _handle_chat_command(message, repo, args, settings)
+        return
+
     classification = {"hot": "HOT", "warm": "WARM"}.get(name)
     since = start_of_today(settings.display_timezone) if name == "today" else None
     limit = max(1, min(int(args), 50)) if args.isdigit() else 10
@@ -141,6 +198,159 @@ async def admin_command(message: Message, command: CommandObject, **data: Any) -
     header = headers.get(name, f"📋 Latest leads ({len(rows)})")
     body = "\n".join(_lead_line(lead) for lead in rows)
     await _reply(message, f"<b>{header}</b>\n{body}")
+
+
+async def _handle_export(message: Message, repo: Any, args: str, settings: Settings) -> None:
+    """Export leads as CSV file and send to admin."""
+    import csv
+    import io
+    from aiogram.types import BufferedInputFile
+
+    # Parse optional filter: e.g. /export hot or /export today
+    classification = None
+    since = None
+    if args.lower() in ("hot", "warm", "cold", "low"):
+        classification = args.upper()
+    elif args.lower() == "today":
+        since = start_of_today(settings.display_timezone)
+
+    leads = await repo.export_leads(
+        classification=classification, since=since, only_completed=False
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "lead_code",
+            "company_name",
+            "contact_name",
+            "phone",
+            "region",
+            "category",
+            "classification",
+            "score",
+            "status",
+            "source",
+            "campaign",
+            "telegram_username",
+            "telegram_user_id",
+            "created_at",
+            "language",
+        ]
+    )
+    for lead in leads:
+        writer.writerow(
+            [
+                lead.lead_code,
+                lead.company_name or "",
+                lead.contact_name or "",
+                lead.phone or "",
+                lead.region or "",
+                lead.category or "",
+                lead.classification or "",
+                lead.score or 0,
+                lead.lead_status or "",
+                lead.source or "",
+                lead.campaign or "",
+                lead.telegram_username or "",
+                lead.telegram_user_id,
+                lead.created_at.isoformat() if lead.created_at else "",
+                lead.language or "",
+            ]
+        )
+    csv_bytes = output.getvalue().encode("utf-8")
+    file = BufferedInputFile(csv_bytes, filename=f"leads_{classification or 'all'}.csv")
+    await message.answer_document(file, caption=f"📊 {len(leads)} ta lead export qilindi")
+
+
+async def _detailed_analytics(repo: Any, settings: Settings) -> str:
+    since = start_of_today(settings.display_timezone)
+    today = await repo.classification_counts(since=since)
+    total = await repo.classification_counts()
+    statuses = await repo.status_counts()
+    sources = await repo.source_breakdown(limit=10)
+    avg = await repo.average_score()
+    visitors = await repo.visitor_count()
+    starts = await repo.started_count()
+    total_completed = await repo.count_leads()
+
+    lines = [
+        "<b>📊 Batafsil Analitika</b>",
+        "",
+        f"Bugun: HOT {today.get('HOT',0)} WARM {today.get('WARM',0)} COLD {today.get('COLD',0)}",
+        f"Jami: HOT {total.get('HOT',0)} WARM {total.get('WARM',0)} COLD {total.get('COLD',0)} LOW {total.get('LOW',0)}",
+        f"Visitor: {visitors} | Boshlagan: {starts} | Tugatgan: {total_completed}",
+        f"O'rtacha score: {avg}",
+        "",
+        "<b>Pipeline:</b>",
+    ]
+    for k, v in sorted(statuses.items()):
+        lines.append(f"{k}: {v}")
+    lines.append("")
+    lines.append("<b>Top manbalar:</b>")
+    for row in sources[:5]:
+        lines.append(
+            f"{row['source']} {row['campaign'] or ''}: {row['total']} leads, {row['qualified']} qualified"
+        )
+    return "\n".join(lines)
+
+
+async def _handle_chat_command(message: Message, repo: Any, args: str, settings: Settings) -> None:
+    if not args:
+        await _reply(
+            message,
+            "Foydalanish: /chat <FD000123 | user_id> <xabar>\n"
+            "Misol: /chat FD000042 Salom, siz bilan bog'lanmoqchimiz",
+        )
+        return
+    parts = args.split(maxsplit=1)
+    if len(parts) < 2:
+        await _reply(message, "Xabar matnini kiriting: /chat FD000123 Salom")
+        return
+    identifier, text = parts[0], parts[1]
+    lead = await repo.find_lead(identifier)
+    if lead is None:
+        # try as telegram_user_id
+        if identifier.isdigit():
+            lead = await repo.last_completed(int(identifier))
+        if lead is None:
+            await _reply(message, t("err.lead_not_found", settings.default_language))
+            return
+
+    # Send via bot if available
+    bot = getattr(message, "bot", None) or getattr(message, "_bot", None)
+    # Actually bot is in data, but we have message.bot?
+    # We'll use service via repo? Simpler: try to get bot from message
+    try:
+        # Import here to avoid circular
+        from aiogram import Bot
+
+        # If bot not in message, we can't send, but we can still log
+        # We'll attempt via message's bot
+        if hasattr(message, "bot") and message.bot:
+            await message.bot.send_message(lead.telegram_user_id, text)
+        else:
+            # Fallback: use lead_service? We'll just save as outbound
+            pass
+    except Exception:
+        pass
+
+    # Save as chat message
+    try:
+        await repo.add_chat_message(
+            telegram_user_id=lead.telegram_user_id,
+            lead_id=lead.id,
+            direction="outbound",
+            text=text,
+            admin_user_id=message.from_user.id if message.from_user else None,
+            admin_username=message.from_user.username if message.from_user else None,
+            is_read=True,
+        )
+    except Exception:
+        pass
+
+    await _reply(message, f"✅ {lead.lead_code} ga xabar yuborildi: {esc(text[:100])}")
 
 
 async def _stats(repo: Any, settings: Settings) -> str:

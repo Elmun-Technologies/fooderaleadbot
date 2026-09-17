@@ -14,12 +14,17 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 __all__ = [
     "Base",
     "BotUser",
+    "Broadcast",
+    "BroadcastStatus",
+    "ChatDirection",
+    "ChatMessage",
     "Classification",
     "FunnelEvent",
     "Lead",
@@ -67,6 +72,18 @@ class LeadStatus(StrEnum):
 
 #: Statuses that must not be "downgraded" by accident (managers can still force via /lead)
 LOCKED_STATUSES: frozenset[str] = frozenset({LeadStatus.BOOKED})
+
+
+class BroadcastStatus(StrEnum):
+    DRAFT = "DRAFT"
+    SENDING = "SENDING"
+    DONE = "DONE"
+    FAILED = "FAILED"
+
+
+class ChatDirection(StrEnum):
+    INBOUND = "inbound"  # from lead to admin
+    OUTBOUND = "outbound"  # from admin to lead
 
 
 class FunnelEvent(StrEnum):
@@ -284,3 +301,82 @@ class LeadEvent(Base):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<LeadEvent {self.event} lead={self.lead_id}>"
+
+
+class Broadcast(Base):
+    """Mass messaging to leads (rassilka) with optional photo/document."""
+
+    __tablename__ = "broadcasts"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    photo_file_id: Mapped[str | None] = mapped_column(String(255))
+    photo_url: Mapped[str | None] = mapped_column(String(512))
+    document_file_id: Mapped[str | None] = mapped_column(String(255))
+    document_url: Mapped[str | None] = mapped_column(String(512))
+    document_name: Mapped[str | None] = mapped_column(String(255))
+
+    # targeting filters (JSON for flexibility)
+    filter_classification: Mapped[str | None] = mapped_column(String(32))
+    filter_status: Mapped[str | None] = mapped_column(String(32))
+    filter_source: Mapped[str | None] = mapped_column(String(32))
+    filter_campaign: Mapped[str | None] = mapped_column(String(128))
+    filter_lead_type: Mapped[str | None] = mapped_column(String(16))
+    filter_language: Mapped[str | None] = mapped_column(String(8))
+
+    status: Mapped[str] = mapped_column(
+        String(16), default=BroadcastStatus.DRAFT.value, server_default=BroadcastStatus.DRAFT.value
+    )
+    total_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    sent_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    failed_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    created_by_id: Mapped[int | None] = mapped_column(BigInt)
+    created_by_username: Mapped[str | None] = mapped_column(String(64))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<Broadcast id={self.id} status={self.status} total={self.total_count}>"
+
+
+class ChatMessage(Base):
+    """Direct chat between admin and lead (bidirectional)."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    lead_id: Mapped[int | None] = mapped_column(
+        BigInt, ForeignKey("leads.id", ondelete="SET NULL"), index=True
+    )
+    telegram_user_id: Mapped[int] = mapped_column(BigInt, index=True)
+    direction: Mapped[str] = mapped_column(String(16), default=ChatDirection.INBOUND.value)
+
+    text: Mapped[str | None] = mapped_column(Text)
+    photo_file_id: Mapped[str | None] = mapped_column(String(255))
+    document_file_id: Mapped[str | None] = mapped_column(String(255))
+    file_name: Mapped[str | None] = mapped_column(String(255))
+    file_type: Mapped[str | None] = mapped_column(String(32))
+
+    # admin who sent (for outbound)
+    admin_user_id: Mapped[int | None] = mapped_column(BigInt)
+    admin_username: Mapped[str | None] = mapped_column(String(64))
+
+    # telegram message ids for tracking
+    telegram_message_id: Mapped[int | None] = mapped_column(Integer)
+    reply_to_message_id: Mapped[int | None] = mapped_column(Integer)
+
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    lead: Mapped[Lead | None] = relationship(backref="chat_messages")
+
+    __table_args__ = (
+        Index("ix_chat_messages_user_created", "telegram_user_id", "created_at"),
+        Index("ix_chat_messages_lead_created", "lead_id", "created_at"),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<ChatMessage id={self.id} user={self.telegram_user_id} dir={self.direction}>"

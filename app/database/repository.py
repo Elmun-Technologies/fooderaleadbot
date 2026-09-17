@@ -16,6 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import (
     BotUser,
+    Broadcast,
+    BroadcastStatus,
+    ChatDirection,
+    ChatMessage,
     Classification,
     FunnelEvent,
     Lead,
@@ -478,3 +482,198 @@ class LeadRepository:
             .limit(200)
         )
         return (await self.session.execute(stmt)).scalars().all()
+
+    # --------------------------------------------------------------- broadcasts
+    async def create_broadcast(self, **values: Any) -> Broadcast:
+        row = Broadcast(**values)
+        self.session.add(row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return row
+
+    async def get_broadcast(self, broadcast_id: int) -> Broadcast | None:
+        return await self.session.get(Broadcast, broadcast_id)
+
+    async def list_broadcasts(self, *, limit: int = 50, offset: int = 0) -> Sequence[Broadcast]:
+        result = await self.session.execute(
+            select(Broadcast).order_by(Broadcast.created_at.desc()).limit(limit).offset(offset)
+        )
+        return result.scalars().all()
+
+    async def update_broadcast(self, broadcast_id: int, **values: Any) -> Broadcast | None:
+        row = await self.session.get(Broadcast, broadcast_id)
+        if row is None:
+            return None
+        for k, v in values.items():
+            setattr(row, k, v)
+        await self.session.commit()
+        return row
+
+    async def count_broadcasts(self) -> int:
+        result = await self.session.execute(select(func.count()).select_from(Broadcast))
+        return int(result.scalar_one())
+
+    # --------------------------------------------------------------- chat
+    async def add_chat_message(self, **values: Any) -> ChatMessage:
+        row = ChatMessage(**values)
+        self.session.add(row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return row
+
+    async def list_chat_messages(
+        self, *, telegram_user_id: int | None = None, lead_id: int | None = None, limit: int = 100
+    ) -> Sequence[ChatMessage]:
+        stmt = select(ChatMessage).order_by(ChatMessage.created_at.asc())
+        if telegram_user_id is not None:
+            stmt = stmt.where(ChatMessage.telegram_user_id == telegram_user_id)
+        if lead_id is not None:
+            stmt = stmt.where(ChatMessage.lead_id == lead_id)
+        stmt = stmt.limit(limit)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def get_lead_by_notify_message(self, chat_id: int, message_id: int) -> Lead | None:
+        result = await self.session.execute(
+            select(Lead).where(Lead.notify_chat_id == chat_id, Lead.notify_message_id == message_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_chat_history(self, telegram_user_id: int, limit: int = 200) -> Sequence[ChatMessage]:
+        result = await self.session.execute(
+            select(ChatMessage)
+            .where(ChatMessage.telegram_user_id == telegram_user_id)
+            .order_by(ChatMessage.created_at.asc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def unread_chat_count(self) -> int:
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(ChatMessage)
+            .where(ChatMessage.direction == ChatDirection.INBOUND.value, ChatMessage.is_read.is_(False))
+        )
+        return int(result.scalar_one())
+
+    async def mark_chat_read(self, telegram_user_id: int) -> None:
+        await self.session.execute(
+            update(ChatMessage)
+            .where(
+                ChatMessage.telegram_user_id == telegram_user_id,
+                ChatMessage.direction == ChatDirection.INBOUND.value,
+                ChatMessage.is_read.is_(False),
+            )
+            .values(is_read=True)
+        )
+        await self.session.commit()
+
+    async def list_recent_chats(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        # latest message per user
+        subq = (
+            select(
+                ChatMessage.telegram_user_id,
+                func.max(ChatMessage.created_at).label("last_at"),
+                func.count().label("total"),
+                func.sum(case((ChatMessage.is_read.is_(False), 1), else_=0)).label("unread"),
+            )
+            .group_by(ChatMessage.telegram_user_id)
+            .subquery()
+        )
+        stmt = (
+            select(
+                subq.c.telegram_user_id,
+                subq.c.last_at,
+                subq.c.total,
+                subq.c.unread,
+                Lead.id.label("lead_id"),
+                Lead.lead_code,
+                Lead.company_name,
+                Lead.contact_name,
+                Lead.telegram_username,
+            )
+            .outerjoin(Lead, Lead.telegram_user_id == subq.c.telegram_user_id)
+            .order_by(subq.c.last_at.desc())
+            .limit(limit)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return [
+            {
+                "telegram_user_id": r.telegram_user_id,
+                "last_at": r.last_at,
+                "total": int(r.total or 0),
+                "unread": int(r.unread or 0),
+                "lead_id": r.lead_id,
+                "lead_code": r.lead_code,
+                "company_name": r.company_name,
+                "contact_name": r.contact_name,
+                "telegram_username": r.telegram_username,
+            }
+            for r in rows
+        ]
+
+    async def search_leads(
+        self, query: str, *, limit: int = 20
+    ) -> Sequence[Lead]:
+        like = f"%{query.strip()}%"
+        stmt = (
+            select(Lead)
+            .where(
+                or_(
+                    Lead.company_name.ilike(like),
+                    Lead.contact_name.ilike(like),
+                    Lead.phone.ilike(like),
+                    Lead.lead_code.ilike(like),
+                    Lead.telegram_username.ilike(like),
+                    Lead.telegram_first_name.ilike(like),
+                )
+            )
+            .order_by(Lead.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def export_leads(
+        self,
+        *,
+        classification: Sequence[str] | str | None = None,
+        lead_type: str | None = None,
+        since: datetime | None = None,
+        campaign: str | None = None,
+        source: str | None = None,
+        status: str | None = None,
+        only_completed: bool = False,
+    ) -> Sequence[Lead]:
+        conditions = self._lead_filters(
+            classification=classification,
+            lead_type=lead_type,
+            since=since,
+            campaign=campaign,
+            source=source,
+            status=status,
+            only_completed=only_completed,
+        )
+        stmt = select(Lead).order_by(Lead.created_at.desc())
+        for cond in conditions:
+            stmt = stmt.where(cond)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def leads_for_broadcast(self, broadcast: Broadcast) -> Sequence[Lead]:
+        conditions: list[Any] = [Lead.completed_at.is_not(None)]
+        if broadcast.filter_classification:
+            conditions.append(Lead.classification == broadcast.filter_classification)
+        if broadcast.filter_status:
+            conditions.append(Lead.lead_status == broadcast.filter_status)
+        if broadcast.filter_source:
+            conditions.append(Lead.source == broadcast.filter_source)
+        if broadcast.filter_campaign:
+            conditions.append(Lead.campaign == broadcast.filter_campaign)
+        if broadcast.filter_lead_type:
+            conditions.append(Lead.lead_type == broadcast.filter_lead_type)
+        if broadcast.filter_language:
+            conditions.append(Lead.language == broadcast.filter_language)
+        stmt = select(Lead).where(and_(*conditions)).order_by(Lead.id.asc())
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
