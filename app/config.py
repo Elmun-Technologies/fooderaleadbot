@@ -94,6 +94,15 @@ class Settings(BaseSettings):
     display_timezone: str = "Asia/Tashkent"
     lead_code_prefix: str = "FD"
 
+    # --------------------------------------------------------------- Admin panel (Fly.io)
+    admin_panel_enabled: bool = True
+    admin_panel_host: str = "0.0.0.0"
+    admin_panel_port: int = 8080
+    admin_panel_username: str = "admin"
+    admin_panel_password: str = ""
+    admin_panel_secret_key: str = ""
+    admin_panel_session_ttl_hours: int = 24
+
     # ------------------------------------------------------- Qualification rule
     hot_min_score: int = 75
     warm_min_score: int = 55

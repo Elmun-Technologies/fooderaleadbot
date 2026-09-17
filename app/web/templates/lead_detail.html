@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}{{ lead.lead_code }} - FOODERA{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center space-x-4">
+        <a href="/admin/leads" class="px-3 py-2 bg-white border rounded-lg text-sm hover:bg-gray-50">← {{ t('leads') }}</a>
+        <h1 class="text-2xl font-bold">{{ lead.lead_code }} - {{ lead.company_name or lead.contact_name }}</h1>
+        <span class="px-3 py-1 rounded-full text-sm font-medium
+            {% if lead.classification == 'HOT' %}bg-red-100 text-red-800
+            {% elif lead.classification == 'WARM' %}bg-yellow-100 text-yellow-800
+            {% else %}bg-gray-100 text-gray-800{% endif %}">{{ lead.classification }} {{ lead.score }}/100</span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main info -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="bg-white rounded-xl shadow-sm p-6 border">
+                <h3 class="font-semibold mb-4">{{ t('lead_detail') }}</h3>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div><span class="text-gray-500">Kompaniya:</span> <span class="font-medium">{{ lead.company_name or '-' }}</span></div>
+                    <div><span class="text-gray-500">Kontakt:</span> <span class="font-medium">{{ lead.contact_name or '-' }} {{ lead.position or '' }}</span></div>
+                    <div><span class="text-gray-500">Telefon:</span> <span class="font-medium">{{ lead.phone or '-' }}</span></div>
+                    <div><span class="text-gray-500">Hudud:</span> <span class="font-medium">{{ lead.region or '' }} {{ lead.country or '' }}</span></div>
+                    <div><span class="text-gray-500">Turi:</span> <span class="font-medium">{{ lead.company_type or '-' }}</span></div>
+                    <div><span class="text-gray-500">Yo'nalish:</span> <span class="font-medium">{{ lead.category or '-' }}</span></div>
+                    <div><span class="text-gray-500">Stend:</span> <span class="font-medium">{{ lead.preferred_stand_size or '-' }}</span></div>
+                    <div><span class="text-gray-500">Tayyorlik:</span> <span class="font-medium">{{ lead.readiness or '-' }}</span></div>
+                    <div><span class="text-gray-500">Sayt:</span> <span class="font-medium">{{ lead.website or '-' }}</span></div>
+                    <div><span class="text-gray-500">Instagram:</span> <span class="font-medium">{{ lead.instagram or '-' }}</span></div>
+                    <div><span class="text-gray-500">Manba:</span> <span class="font-medium">{{ lead.source or '' }} / {{ lead.campaign or '' }} / {{ lead.creative or '' }}</span></div>
+                    <div><span class="text-gray-500">Til:</span> <span class="font-medium">{{ lead.language }}</span></div>
+                    <div><span class="text-gray-500">Telegram:</span> <span class="font-medium">@{{ lead.telegram_username or lead.telegram_user_id }}</span></div>
+                    <div><span class="text-gray-500">User ID:</span> <span class="font-medium">{{ lead.telegram_user_id }}</span></div>
+                </div>
+            </div>
+
+            <!-- Status change -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border">
+                <h3 class="font-semibold mb-4">{{ t('status') }}: {{ lead.lead_status }}</h3>
+                <form method="POST" action="/admin/leads/{{ lead.id }}/status" class="flex gap-2">
+                    <select name="status" class="px-3 py-2 border rounded-lg text-sm flex-1">
+                        {% for s in statuses %}
+                        <option value="{{ s }}" {% if s == lead.lead_status %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm">O'zgartirish</button>
+                </form>
+                {% if lead.manager_username %}
+                <p class="text-xs text-gray-500 mt-2">Oxirgi: @{{ lead.manager_username }} {{ lead.status_changed_at.strftime('%d.%m.%Y %H:%M') if lead.status_changed_at else '' }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Events -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border">
+                <h3 class="font-semibold mb-4">Funnel / Events</h3>
+                <div class="space-y-2 max-h-64 overflow-y-auto">
+                    {% for ev in events %}
+                    <div class="flex justify-between text-xs py-1 border-b last:border-0">
+                        <span class="font-medium">{{ ev.event }} {% if ev.step %}({{ ev.step }}){% endif %}</span>
+                        <span class="text-gray-500">{{ ev.created_at.strftime('%d.%m %H:%M') if ev.created_at else '' }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat -->
+        <div class="space-y-6">
+            <div class="bg-white rounded-xl shadow-sm p-6 border">
+                <h3 class="font-semibold mb-4"><i class="fas fa-comments mr-2"></i>{{ t('chat_history') }}</h3>
+                
+                <div class="space-y-3 max-h-96 overflow-y-auto mb-4 border rounded-lg p-3 bg-gray-50">
+                    {% for msg in chat_history %}
+                    <div class="p-2 rounded-lg {% if msg.direction == 'inbound' %}bg-white border{% else %}bg-blue-50 border-blue-200{% endif %}">
+                        <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>{% if msg.direction == 'inbound' %}📥 {{ t('inbound') }}{% else %}📤 {{ t('outbound') }} @{{ msg.admin_username or 'admin' }}{% endif %}</span>
+                            <span>{{ msg.created_at.strftime('%d.%m %H:%M') if msg.created_at else '' }}</span>
+                        </div>
+                        {% if msg.text %}
+                        <p class="text-sm">{{ msg.text }}</p>
+                        {% endif %}
+                        {% if msg.photo_file_id %}
+                        <p class="text-xs text-gray-500">📷 Photo</p>
+                        {% endif %}
+                        {% if msg.document_file_id %}
+                        <p class="text-xs text-gray-500">📎 {{ msg.file_name or 'File' }}</p>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-gray-500 text-center py-4">Chat yo'q</p>
+                    {% endfor %}
+                </div>
+
+                <form method="POST" action="/admin/leads/{{ lead.id }}/message" class="space-y-3">
+                    <textarea name="message" rows="3" placeholder="{{ t('message') }}..." class="w-full px-3 py-2 border rounded-lg text-sm" required></textarea>
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                        <i class="fas fa-paper-plane mr-1"></i> {{ t('send_message') }}
+                    </button>
+                </form>
+
+                <div class="mt-4 pt-4 border-t">
+                    <a href="/admin/chat/{{ lead.telegram_user_id }}" class="w-full block text-center px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200">
+                        {{ t('chat') }} sahifasiga o'tish →
+                    </a>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm p-6 border">
+                <h3 class="font-semibold mb-3">Tezkor xabarlar</h3>
+                <div class="space-y-2">
+                    <button onclick="document.querySelector('textarea[name=message]').value='Salom! FOODERA EXPO bo\'yicha siz bilan bog\'lanmoqchimiz. Qachon gaplasha olamiz?'" class="w-full text-left px-3 py-2 bg-gray-50 rounded-lg text-xs hover:bg-gray-100">Salomlashish xabari</button>
+                    <button onclick="document.querySelector('textarea[name=message]').value='Stend bo\'yicha ma\'lumot yubordik, ko\'rib chiqing va fikringizni ayting.'" class="w-full text-left px-3 py-2 bg-gray-50 rounded-lg text-xs hover:bg-gray-100">Ma'lumot yuborish</button>
+                    <button onclick="document.querySelector('textarea[name=message]').value='Sizning arizangiz qabul qilindi, menejerimiz tez orada bog\'lanadi.'" class="w-full text-left px-3 py-2 bg-gray-50 rounded-lg text-xs hover:bg-gray-100">Tasdiqlash</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Broadcast - FOODERA{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">📢 {{ t('broadcast') }}</h1>
+        <a href="/admin/broadcast/create" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+            <i class="fas fa-plus mr-1"></i> {{ t('create_broadcast') }}
+        </a>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 border-b">
+                    <tr class="text-left text-xs font-medium text-gray-500 uppercase">
+                        <th class="px-4 py-3">ID</th>
+                        <th class="px-4 py-3">{{ t('broadcast_text') }}</th>
+                        <th class="px-4 py-3">{{ t('broadcast_targets') }}</th>
+                        <th class="px-4 py-3">{{ t('broadcast_status') }}</th>
+                        <th class="px-4 py-3">{{ t('broadcast_sent') }}</th>
+                        <th class="px-4 py-3">Sana</th>
+                        <th class="px-4 py-3">{{ t('actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for b in broadcasts %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm font-medium">#{{ b.id }}</td>
+                        <td class="px-4 py-3 text-sm max-w-xs truncate">{{ b.text[:100] }} {% if b.photo_file_id %}📷{% endif %} {% if b.document_file_id %}📎{% endif %}</td>
+                        <td class="px-4 py-3 text-xs">
+                            {% if b.filter_classification %}<span class="bg-gray-100 px-2 py-1 rounded">{{ b.filter_classification }}</span>{% endif %}
+                            {% if b.filter_source %}<span class="bg-blue-100 px-2 py-1 rounded">{{ b.filter_source }}</span>{% endif %}
+                            {% if not b.filter_classification and not b.filter_source %}Barchasi{% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 rounded-full text-xs
+                                {% if b.status == 'DONE' %}bg-green-100 text-green-800
+                                {% elif b.status == 'SENDING' %}bg-yellow-100 text-yellow-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">{{ b.status }}</span>
+                        </td>
+                        <td class="px-4 py-3 text-sm">{{ b.sent_count }}/{{ b.total_count }} {% if b.failed_count %}<span class="text-red-500">({{ b.failed_count }} xato)</span>{% endif %}</td>
+                        <td class="px-4 py-3 text-xs text-gray-500">{{ b.created_at.strftime('%d.%m %H:%M') if b.created_at else '' }}</td>
+                        <td class="px-4 py-3">
+                            <a href="/admin/broadcast/{{ b.id }}" class="text-blue-600 hover:underline text-sm">{{ t('view') }}</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Rassilkalar yo'q</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <h3 class="font-semibold text-blue-900 mb-2">💡 Rassilka haqida</h3>
+        <ul class="text-sm text-blue-800 space-y-1 list-disc list-inside">
+            <li>Rasm va fayl biriktirishingiz mumkin (Telegram file_id orqali yuboriladi)</li>
+            <li>Filtr bo'yicha ma'lum leadlarga yuborishingiz mumkin (masalan faqat HOT)</li>
+            <li>Yuborish fon jarayonida amalga oshadi, 20 ta xabar yuborilganda holat yangilanadi</li>
+            <li>Bloklagan foydalanuvchilar avtomatik o'tkazib yuboriladi</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

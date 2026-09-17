@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Chat {{ telegram_user_id }} - FOODERA{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-4">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="/admin/chat" class="px-3 py-2 bg-white border rounded-lg text-sm">← {{ t('chat') }}</a>
+            <h1 class="text-xl font-bold">
+                {% if lead %}{{ lead.lead_code }} - {{ lead.company_name or lead.contact_name }}{% else %}{{ telegram_user_id }}{% endif %}
+            </h1>
+        </div>
+        {% if lead %}
+        <a href="/admin/leads/{{ lead.id }}" class="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm">{{ t('view') }} lead</a>
+        {% endif %}
+    </div>
+
+    {% if lead %}
+    <div class="bg-white rounded-xl shadow-sm p-4 border">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div><span class="text-gray-500">Kompaniya:</span> {{ lead.company_name or '-' }}</div>
+            <div><span class="text-gray-500">Kontakt:</span> {{ lead.contact_name or '-' }}</div>
+            <div><span class="text-gray-500">Telefon:</span> {{ lead.phone or '-' }}</div>
+            <div><span class="text-gray-500">Status:</span> {{ lead.lead_status }} {{ lead.classification }}</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="bg-white rounded-xl shadow-sm border flex flex-col" style="height: 600px;">
+        <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50" id="chatContainer">
+            {% for msg in history %}
+            <div class="flex {% if msg.direction == 'outbound' %}justify-end{% else %}justify-start{% endif %}">
+                <div class="max-w-xs md:max-w-md px-4 py-2 rounded-2xl
+                    {% if msg.direction == 'outbound' %}bg-blue-600 text-white rounded-br-none{% else %}bg-white border shadow-sm rounded-bl-none{% endif %}">
+                    {% if msg.text %}
+                    <p class="text-sm whitespace-pre-wrap">{{ msg.text }}</p>
+                    {% endif %}
+                    {% if msg.photo_file_id %}
+                    <p class="text-xs mt-1 {% if msg.direction == 'outbound' %}text-blue-100{% else %}text-gray-500{% endif %}">📷 Photo</p>
+                    {% endif %}
+                    {% if msg.document_file_id %}
+                    <p class="text-xs mt-1 {% if msg.direction == 'outbound' %}text-blue-100{% else %}text-gray-500{% endif %}">📎 {{ msg.file_name or 'File' }}</p>
+                    {% endif %}
+                    <div class="flex justify-between items-center mt-1 space-x-2">
+                        <span class="text-xs {% if msg.direction == 'outbound' %}text-blue-200{% else %}text-gray-400{% endif %}">
+                            {% if msg.direction == 'outbound' %}@{{ msg.admin_username or 'admin' }}{% else %}Lead{% endif %}
+                        </span>
+                        <span class="text-xs {% if msg.direction == 'outbound' %}text-blue-200{% else %}text-gray-400{% endif %}">{{ msg.created_at.strftime('%H:%M') if msg.created_at else '' }}</span>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-500 py-10">
+                <i class="fas fa-comments text-3xl mb-2"></i>
+                <p class="text-sm">Xabarlar yo'q</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="border-t p-4 bg-white">
+            <form method="POST" action="/admin/chat/{{ telegram_user_id }}/send" enctype="multipart/form-data" class="space-y-3">
+                <div class="flex space-x-2">
+                    <textarea name="message" rows="2" placeholder="{{ t('message') }}..." class="flex-1 px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" required></textarea>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 self-end">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div class="flex space-x-2">
+                    <label class="px-3 py-2 bg-gray-100 rounded-lg text-xs cursor-pointer hover:bg-gray-200">
+                        <i class="fas fa-image mr-1"></i> {{ t('photo') }}
+                        <input type="file" name="photo" accept="image/*" class="hidden">
+                    </label>
+                    <label class="px-3 py-2 bg-gray-100 rounded-lg text-xs cursor-pointer hover:bg-gray-200">
+                        <i class="fas fa-paperclip mr-1"></i> {{ t('file') }}
+                        <input type="file" name="document" class="hidden">
+                    </label>
+                    <span class="text-xs text-gray-500 py-2">Rasm/file ixtiyoriy</span>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto scroll to bottom
+    const container = document.getElementById('chatContainer');
+    if (container) {
+        container.scrollTop = container.scrollHeight;
+    }
+</script>
+{% endblock %}
