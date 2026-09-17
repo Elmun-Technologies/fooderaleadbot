@@ -1,0 +1,36 @@
+[project]
+name = "foodera-lead-bot"
+version = "1.0.0"
+description = "FOODERA EXPO 2026 - Telegram lead qualification bot for exhibitors"
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "RUF", "SIM"]
+ignore = [
+    "E501",  # long lines are acceptable in translation catalogs
+    "RUF001", # ambiguous unicode (ʻ and ² are intentional in uz/ru texts)
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+# Alembic writes its own files in its own style - leave the generated migrations alone
+exclude = ["alembic/versions"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning:app.*"]
