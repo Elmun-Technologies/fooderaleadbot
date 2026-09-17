@@ -1,0 +1,53 @@
+# FOODERA EXPO 2026 lead bot - systemd service.
+#
+#   sudo install -m 0644 deploy/foodera-bot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now foodera-bot
+#   journalctl -u foodera-bot -f
+#
+# Expected layout (see README, "Deployment"):
+#   /opt/foodera-bot            the git checkout, owned by the foodera user
+#   /opt/foodera-bot/.venv      virtualenv with `pip install -r requirements.txt`
+#   /opt/foodera-bot/.env       real configuration (chmod 600, never in git)
+#   /var/lib/foodera-bot        the only writable directory (SQLite file, if used)
+
+[Unit]
+Description=FOODERA EXPO 2026 Telegram lead qualification bot
+Documentation=https://core.telegram.org/bots/api
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=foodera
+Group=foodera
+WorkingDirectory=/opt/foodera-bot
+Environment=PYTHONUNBUFFERED=1
+# No EnvironmentFile: the bot reads /opt/foodera-bot/.env itself (pydantic-settings),
+# which keeps quoting rules identical to `python -m app.main` on a developer laptop.
+ExecStart=/opt/foodera-bot/.venv/bin/python -m app.main
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Long polling reconnects by itself; a crash should be retried quickly but not in a loop
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+
+# The bot finishes a message before it is stopped, so give SIGTERM a chance to land
+KillSignal=SIGINT
+
+# --- sandboxing ---------------------------------------------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/foodera-bot
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# SQLite in /var/lib/foodera-bot needs the directory to exist:
+#   sudo install -d -o foodera -g foodera -m 0750 /var/lib/foodera-bot
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,235 @@
+"""Russian message catalog.
+
+Keys must stay identical to :mod:`app.i18n.catalog_uz` (a unit test enforces parity).
+"""
+
+CATALOG: dict[str, str] = {
+    # ------------------------------------------------------------- common
+    "event.name": "FOODERA EXPO 2026",
+    "event.dates": "📅 20–22 октября 2026",
+    "event.location": "📍 SOF EXPO, Самарканд",
+    # ---------------------------------------------------------- language
+    "lang.choose": "🌐 Выберите язык, чтобы продолжить:",
+    "lang.uz": "🇺🇿 O‘zbekcha",
+    "lang.ru": "🇷🇺 Русский",
+    # ------------------------------------------------------------- welcome
+    "welcome.text": (
+        "👋 Здравствуйте!\n\n"
+        "FOODERA EXPO 2026 — B2B выставка для представителей пищевой промышленности.\n\n"
+        "📅 20–22 октября 2026\n"
+        "📍 SOF EXPO, Самарканд\n\n"
+        "Ответьте на несколько коротких вопросов — мы подберём подходящий формат "
+        "участия для вашей компании."
+    ),
+    "welcome.cta": "Начать →",
+    "progress": "Вопрос {step}/{total}",
+    # ------------------------------------------------------- questions
+    "q.intent": "Что вас интересует на FOODERA EXPO?",
+    "q.company_type": "К какому типу относится ваша компания?",
+    "q.category": "Выберите направление, которое соответствует вашему бизнесу:",
+    "q.company_name": "Укажите название компании или бренда:",
+    "q.region": "Где расположена ваша компания?",
+    "q.country": "Укажите вашу страну:",
+    "q.online": "Есть ли у вашей компании сайт или страница в Instagram?",
+    "q.url": "Пришлите ссылку на сайт или Instagram (или @username):",
+    "q.contact": "Укажите имя и должность.",
+    "q.phone": "Отправьте номер телефона для связи.",
+    "q.stand": "Какой формат стенда вам подходит?",
+    "q.readiness": "На какой стадии решение об участии?",
+    "q.v_name": "Укажите ваше имя:",
+    "q.v_phone": "Отправьте номер телефона для связи.",
+    "q.v_region": "Из какого вы города?",
+    "q.v_relation": "Как вы связаны с пищевой индустрией?",
+    # -------------------------------------------------------------- hints
+    "hint.company_name": "От 2 до 120 символов.",
+    "hint.contact": "Пример: Azizbek — Директор по продажам",
+    "hint.url": "Например: foodcompany.uz или @foodcompany",
+    "hint.phone": "Международный формат тоже подходит.",
+    "hint.optional": "Необязательно — можно пропустить.",
+    "hint.country": "Например: Казахстан",
+    "hint.category": "Выберите одно основное направление.",
+    # ------------------------------------------------------------ buttons
+    "btn.start": "Начать →",
+    "btn.back": "⬅️ Назад",
+    "btn.skip": "Пропустить",
+    "btn.send_contact": "📱 Отправить номер телефона",
+    "btn.manual_phone": "⌨️ Ввести номер вручную",
+    "btn.update": "Обновить данные",
+    "btn.continue": "▶️ Продолжить",
+    "btn.restart": "🔄 Начать заново",
+    "btn.cancel": "Отмена",
+    "btn.support": "❓ Задать вопрос",
+    "btn.more_categories": "Далее ›",
+    "btn.fewer_categories": "‹ Назад",
+    "btn.status.contacted": "📞 Взяли в работу",
+    "btn.status.negotiation": "💬 В переговорах",
+    "btn.status.booked": "✅ Стенд забронирован",
+    "btn.status.not_qualified": "❌ Не подходит",
+    # ------------------------------------------------------- info/errors
+    "err.invalid_option": "Этот вариант больше недоступен. Пожалуйста, выберите заново.",
+    "err.stale_callback": "Кнопка устарела. Ответьте на текущий вопрос.",
+    "err.no_active_form": "Активной анкеты нет.",
+    "err.too_short": "Введите не менее {min} символов.",
+    "err.url_format": "Проверьте формат: ссылка или @username, например foodcompany.uz",
+    "err.company_name_len": "Название компании должно содержать от 2 до 120 символов.",
+    "err.contact_len": "Укажите имя полностью (минимум 2 символа).",
+    "err.country_len": "Укажите название страны полностью (минимум 2 символа).",
+    "err.phone_format": "Неверный формат номера. Пример: +998 90 123 45 67",
+    "err.db": "К сожалению, временная техническая ошибка. Попробуйте чуть позже.",
+    "err.rate_limited": "Слишком активно. 😊 Сделаем паузу и продолжим через минуту.",
+    "err.unknown": "К сожалению, произошла ошибка. Пожалуйста, начните заново: /start",
+    "err.lead_not_found": "Этот лид не найден.",
+    "err.status_changed": "Статус этого лида уже изменил другой менеджер. Обновите карточку.",
+    "err.status_same": "Лид уже в этом статусе.",
+    "err.status_transition": "Такой переход статуса запрещён (используйте /setstatus).",
+    "err.not_manager": "Это действие доступно только менеджерам отдела продаж.",
+    "err.admin_only": "Эта команда доступна только администраторам.",
+    "info.already_applied": ("Ваша заявка уже принята.\n\nЕсли хотите обновить данные:"),
+    "info.draft_found": "У вас есть незаполненная анкета. Продолжить или начать заново?",
+    "info.cancelled": "Анкета отменена.\nЧтобы начать заново: /start",
+    "info.lead_code": "Номер вашей заявки: {code}",
+    "info.restarted": "Новая анкета начата.",
+    "info.lang_saved": "Язык сохранён ✅",
+    "info.no_leads": "Заявок пока нет.",
+    "info.current": "Ваш ответ: {value}",
+    "info.field_required": "Этот ответ обязателен.",
+    "info.first_question": "Это первый вопрос.",
+    "err.use_buttons": "Пожалуйста, выберите вариант кнопкой или начните заново: /start",
+    "err.phone_foreign": "Пожалуйста, отправьте свой собственный номер.",
+    "visitor.intro": "Понятно! Ответьте на 3 коротких вопроса, чтобы зарегистрироваться как гость.",
+    "flow.visitor_intro": "👋 Зададим несколько вопросов для посещения выставки.",
+    "help.text": (
+        "🤖 Этот бот принимает заявки на участие в FOODERA EXPO 2026.\n\n"
+        "/start — начать анкету\n"
+        "/restart — начать заново\n"
+        "/help — помощь"
+    ),
+    # --------------------------------------------------------- completion
+    "success.qualified": (
+        "✅ Спасибо! Данные приняты.\n\n"
+        "Менеджер FOODERA EXPO свяжется с вами и расскажет о доступных стендах, "
+        "расположении и условиях участия.\n\n"
+        "📅 20–22 октября 2026\n📍 SOF EXPO, Самарканд"
+    ),
+    "success.warm": (
+        "✅ Спасибо! Мы получили данные о вашей компании.\n\n"
+        "Менеджер FOODERA EXPO свяжется с вами по вопросам участия.\n\n"
+        "📅 20–22 октября 2026\n📍 SOF EXPO, Самарканд"
+    ),
+    "success.cold": (
+        "Спасибо! Ваша заявка принята.\n\n"
+        "Команда FOODERA EXPO изучит ваши данные.\n\n"
+        "📅 20–22 октября 2026\n📍 SOF EXPO, Самарканд"
+    ),
+    "success.visitor": (
+        "✅ Спасибо!\n\n"
+        "Ваши данные для посещения FOODERA EXPO приняты.\n\n"
+        "📅 20–22 октября 2026\n📍 SOF EXPO, Самарканд"
+    ),
+    "support.line": "Если есть вопросы: {username}",
+    # ---------------------------------------------------------- lead card
+    "card.title_lead": "🔥 FOODERA — НОВЫЙ ЛИД",
+    "card.title_visitor": "👤 FOODERA — ГОСТЬ ЗАРЕГИСТРИРОВАН",
+    "card.high_intent": "🔥 HIGH INTENT",
+    "card.status": "Статус",
+    "card.score": "Оценка",
+    "card.company": "🏢 Компания",
+    "card.contact": "👤 Контакт",
+    "card.phone": "📱 Телефон",
+    "card.region": "📍 Регион",
+    "card.company_type": "🏭 Тип компании",
+    "card.category": "🍴 Направление",
+    "card.stand": "📐 Стенд",
+    "card.readiness": "🎯 Готовность",
+    "card.instagram": "🌐 Instagram",
+    "card.website": "🌐 Сайт",
+    "card.source": "📢 Источник",
+    "card.creative": "🎨 Креатив",
+    "card.campaign": "📣 Кампания",
+    "card.telegram": "Telegram",
+    "card.user_id": "🆔 User ID",
+    "card.lead_id": "🔖 ID лида",
+    "card.sent_at": "⏱ Отправлен",
+    "card.relation": "🤝 Связь с индустрией",
+    "card.country": "🌍 Страна",
+    "card.status_line": "📌 Статус: {status}",
+    "card.status_meta": "📌 Статус: {status} · {manager} · {time}",
+    "card.value_none": "—",
+    "cls.HOT": "🔥 HOT",
+    "cls.WARM": "🌤 WARM",
+    "cls.COLD": "❄️ COLD",
+    "cls.LOW": "⚪ LOW",
+    "cls.VISITOR": "👤 VISITOR",
+    "status.NEW": "🆕 NEW",
+    "status.CONTACTED": "📞 В РАБОТЕ",
+    "status.NEGOTIATION": "💬 ПЕРЕГОВОРЫ",
+    "status.BOOKED": "✅ БРОНЬ",
+    "status.NOT_QUALIFIED": "❌ НЕ ПОДХОДИТ",
+    "status.CLOSED": "📁 ЗАКРЫТ",
+    # ------------------------------------------------------------ options
+    "opt.intent.stand": "Хотим участвовать со стендом от компании",
+    "opt.intent.pricing": "Нужна информация о стендах и ценах",
+    "opt.intent.partner": "Хотим предложить партнёрство",
+    "opt.intent.visitor": "Хочу посетить выставку как гость",
+    "opt.company_type.manufacturer": "Производитель",
+    "opt.company_type.distributor": "Дистрибьютор",
+    "opt.company_type.importer": "Импортёр / Экспортёр",
+    "opt.company_type.retail": "Ритейл / торговая сеть",
+    "opt.company_type.horeca": "HoReCa",
+    "opt.company_type.ingredient": "Ингредиент / поставщик сырья",
+    "opt.company_type.equipment": "Оборудование и технологии",
+    "opt.company_type.logistics": "Логистическая компания",
+    "opt.company_type.other": "Другое",
+    "opt.category.non_alcoholic_drinks": "Безалкогольные напитки",
+    "opt.category.grocery": "Бакалея",
+    "opt.category.frozen_and_semi_finished": "Замороженная и готовая продукция",
+    "opt.category.confectionery_and_bakery": "Кондитерские и хлебобулочные изделия",
+    "opt.category.canned_food": "Консервированная продукция",
+    "opt.category.oils_and_sauces": "Масложировая продукция и соусы",
+    "opt.category.dairy_and_cheese": "Молочная продукция и сыры",
+    "opt.category.meat_poultry_eggs": "Мясо, птица и яйца",
+    "opt.category.organic_and_healthy": "Органическое и здоровое питание",
+    "opt.category.fish_and_seafood": "Рыба и морепродукты",
+    "opt.category.tea_and_coffee": "Чай и кофе",
+    "opt.category.ingredients_and_components": "Ингредиенты и компоненты",
+    "opt.category.produce_and_dried_fruits": "Фрукты, овощи и сухофрукты",
+    "opt.category.equipment_and_technologies": "Оборудование и технологии",
+    "opt.category.logistics": "Логистика",
+    "opt.category.other": "Другое",
+    "opt.region.tashkent": "Ташкент",
+    "opt.region.samarkand": "Самарканд",
+    "opt.region.andijan": "Андижан",
+    "opt.region.fergana": "Фергана",
+    "opt.region.namangan": "Наманган",
+    "opt.region.bukhara": "Бухара",
+    "opt.region.qashqadaryo": "Кашкадарья",
+    "opt.region.surkhandaryo": "Сурхандарья",
+    "opt.region.khorezm": "Хорезм",
+    "opt.region.jizzakh": "Джизак",
+    "opt.region.syrdarya": "Сырдарья",
+    "opt.region.navoiy": "Навои",
+    "opt.region.karakalpakstan": "Каракалпакстан",
+    "opt.region.other_region": "Другой регион",
+    "opt.region.foreign": "За пределами Узбекистана",
+    "opt.online.instagram": "Есть Instagram",
+    "opt.online.website": "Есть сайт",
+    "opt.online.both": "Есть оба",
+    "opt.online.none": "Нет",
+    "opt.stand.size_9": "9 м²",
+    "opt.stand.size_18": "18 м²",
+    "opt.stand.size_27": "27 м²",
+    "opt.stand.size_36_plus": "36 м² и больше",
+    "opt.stand.undecided": "Ещё не определились",
+    "opt.readiness.ready_to_book": "Готовы забронировать стенд",
+    "opt.readiness.review_options": "Изучаем варианты и цены",
+    "opt.readiness.manager_call": "Сначала хотим поговорить с менеджером",
+    "opt.readiness.just_interesting": "Пока просто интересуемся",
+    "opt.relation.professional": "Специалист пищевой промышленности",
+    "opt.relation.retail": "Ритейл / торговля",
+    "opt.relation.horeca": "HoReCa",
+    "opt.relation.distributor": "Дистрибьютор",
+    "opt.relation.student": "Студент",
+    "opt.relation.other": "Другое",
+    "opt.field.website": "сайт",
+    "opt.field.instagram": "Instagram",
+}
