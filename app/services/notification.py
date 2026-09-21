@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import suppress
 from typing import Any
 
@@ -47,6 +48,65 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 MAX_MESSAGE_LENGTH = 3800
+
+#: Operational alerts (broken group id, lost permissions, ...) are critical, but a
+#: misconfigured group is hit by *every* new lead - so admins get at most one alert
+#: per failure kind per hour instead of a message per lead.
+ALERT_COOLDOWN_SECONDS = 3600.0
+_alert_history: dict[str, float] = {}
+
+
+def _alert_once(key: str, now: float | None = None) -> bool:
+    """Rate-limit operational alerts: one alert per ``key`` per cooldown window."""
+    moment = time.monotonic() if now is None else now
+    if moment - _alert_history.get(key, -ALERT_COOLDOWN_SECONDS) < ALERT_COOLDOWN_SECONDS:
+        return False
+    _alert_history[key] = moment
+    return True
+
+
+def _bad_request_hint(exc: TelegramBadRequest, chat_id: int) -> str:
+    """Translate a Telegram ``Bad Request`` into the concrete fix the operator has to run.
+
+    This is the branch that used to be only logged: the two most common production
+    causes of "nothing reaches the group" (a wrong group id and a wrong topic id) both
+    surface here as ``TelegramBadRequest`` - without an admin alert the bot fails
+    silently on every single lead.
+    """
+    detail = str(exc).lower()
+    if "upgraded to a supergroup" in detail:
+        return (
+            f"The group <code>{chat_id}</code> was upgraded to a supergroup and its id "
+            "changed. Send /chatid inside the group and put the new <code>-100…</code> id "
+            "into SALES_GROUP_ID / VISITOR_GROUP_ID."
+        )
+    if "thread not found" in detail or "message thread" in detail:
+        return (
+            "The configured topic does not exist (any more) or Topics are disabled in the "
+            "group. Remove SALES_GROUP_TOPIC_ID / VISITOR_GROUP_TOPIC_ID or set the correct "
+            "topic id."
+        )
+    if (
+        "not enough rights" in detail
+        or "have no rights" in detail
+        or "administrator rights" in detail
+    ):
+        return (
+            "The bot has no permission to post in the group. Make it an administrator with "
+            "the right to send messages (in a forum: it also needs access to the topic)."
+        )
+    if "chat not found" in detail:
+        return (
+            f"Telegram cannot see the chat <code>{chat_id}</code>. A supergroup id is "
+            "negative and starts with <code>-100</code> (send /chatid in the group to read "
+            "the real id), and the bot must be a member of the group."
+        )
+    if "button_data_invalid" in detail or "data_invalid" in detail:
+        return "A callback button carries more than 64 bytes of data - shorten the payload."
+    return (
+        f"Telegram rejected the message: <code>{exc}</code>. Double-check the group id and "
+        "topic id configuration."
+    )
 
 
 # --------------------------------------------------------------------------- card
@@ -324,14 +384,20 @@ class LeadNotifier:
                     "cannot post to group %s - add the bot to the group and make sure it can send messages",
                     chat_id,
                 )
-                await self.alert_admins(
-                    f"⚠️ Lead card could not be posted to <code>{chat_id}</code>.\n"
-                    "Check SALES_GROUP_ID: the bot must be a member of the group with "
-                    "<i>Send messages</i> permission."
-                )
+                if _alert_once(f"forbidden:{chat_id}"):
+                    await self.alert_admins(
+                        f"⚠️ Lead card could not be posted to <code>{chat_id}</code>.\n"
+                        "Check SALES_GROUP_ID: the bot must be a member of the group with "
+                        "<i>Send messages</i> permission."
+                    )
                 return None
             except TelegramBadRequest as exc:
                 logger.error("bad request while posting to %s: %s", chat_id, exc)
+                if _alert_once(f"badrequest:{chat_id}"):
+                    await self.alert_admins(
+                        f"⚠️ Lead card could not be posted to <code>{chat_id}</code>.\n"
+                        + _bad_request_hint(exc, chat_id)
+                    )
                 return None
             except Exception:  # pragma: no cover - network safety net
                 logger.exception("unexpected error while posting a lead card")

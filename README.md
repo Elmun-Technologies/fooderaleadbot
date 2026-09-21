@@ -519,7 +519,9 @@ Adding a question means editing data, not code: add the option to `app/options.p
 | Symptom | Cause and fix |
 |---|---|
 | `BOT_TOKEN is empty` at startup | `BOT_TOKEN` missing in `.env`, or the working directory is not the project root. |
-| Leads saved, but nothing in the group | `SALES_GROUP_ID` unset, or the bot is not an admin of that group. The log then contains `lead notification skipped: group is not configured` and `/stats` still counts the leads. |
+| Leads saved, but nothing in the group | Run `python scripts/check_group_delivery.py --send` (on Fly: `fly ssh console -C "python scripts/check_group_delivery.py --send"`): it checks the configuration, the token, the group membership and the topic, and prints the exact fix. Usual causes: `SALES_GROUP_ID` unset (`lead notification skipped: group is not configured` in the log), a wrong id, or the bot not being a member. |
+| Admin gets `⚠️ Lead card could not be posted…` | Delivery is failing and the alert already names the cause: a `-100…` id typo, a group that was upgraded (send `/chatid` for the new id), a removed topic, or missing posting rights. Fix and the next lead card goes through. |
+| *Some* leads reach the group, others do not | That is the qualification gate, not a bug: only `QUALIFY_MIN_CLASSIFICATION` and above (plus phone/company when `REQUIRE_*_FOR_SALES=true`) are pushed. Everyone is stored in the DB either way. |
 | `bot must be an member of the supergroup chat` | Add the bot to the group (it needs *Post messages*). |
 | Cards land in the general chat instead of a topic | Set `SALES_GROUP_TOPIC_ID`, and enable Topics in the group. |
 | `database schema is not ready` | Run `alembic upgrade head`, or set `AUTO_CREATE_TABLES=true` locally. |
