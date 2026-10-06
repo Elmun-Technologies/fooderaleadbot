@@ -7,7 +7,7 @@ Keys are flat ``group.name`` strings and must stay identical across catalogs
 CATALOG: dict[str, str] = {
     # ------------------------------------------------------------- common
     "event.name": "FOODERA EXPO 2026",
-    "event.dates": "📅 20–22 oktabr 2026",
+    "event.dates": "📅 27–29 oktabr 2026",
     "event.location": "📍 SOF EXPO, Samarqand",
     # ---------------------------------------------------------- language
     "lang.choose": "🌐 Davom etish uchun tilni tanlang:",
@@ -17,7 +17,7 @@ CATALOG: dict[str, str] = {
     "welcome.text": (
         "👋 Assalomu alaykum!\n\n"
         "FOODERA EXPO 2026 — oziq-ovqat sanoati vakillari uchun B2B ko‘rgazma.\n\n"
-        "📅 20–22 oktabr 2026\n"
+        "📅 27–29 oktabr 2026\n"
         "📍 SOF EXPO, Samarqand\n\n"
         "Bir necha qisqa savol orqali kompaniyangiz uchun ko‘rgazmada ishtirok "
         "etish imkoniyatini aniqlaymiz."
@@ -113,23 +113,23 @@ CATALOG: dict[str, str] = {
         "✅ Rahmat! Ma’lumotlaringiz qabul qilindi.\n\n"
         "FOODERA EXPO menejeri siz bilan bog‘lanib, mavjud stendlar, joylashuv va "
         "ishtirok shartlari bo‘yicha ma’lumot beradi.\n\n"
-        "📅 20–22 oktabr 2026\n📍 SOF EXPO, Samarqand"
+        "📅 27–29 oktabr 2026\n📍 SOF EXPO, Samarqand"
     ),
     "success.warm": (
         "✅ Rahmat! Kompaniyangiz haqidagi ma’lumotlarni qabul qildik.\n\n"
         "FOODERA EXPO ishtirok imkoniyatlari bo‘yicha menejerimiz siz bilan bog‘lanadi.\n\n"
-        "📅 20–22 oktabr 2026\n📍 SOF EXPO, Samarqand"
+        "📅 27–29 oktabr 2026\n📍 SOF EXPO, Samarqand"
     ),
     "success.cold": (
         "Rahmat! Murojaatingiz qabul qilindi.\n\n"
         "FOODERA EXPO jamoasi ma’lumotlaringizni ko‘rib chiqadi.\n\n"
-        "📅 20–22 oktabr 2026\n📍 SOF EXPO, Samarqand"
+        "📅 27–29 oktabr 2026\n📍 SOF EXPO, Samarqand"
     ),
     "success.visitor": (
         "✅ Rahmat!\n\n"
         "FOODERA EXPO mehmon sifatida tashrif buyurish bo‘yicha ma’lumotlaringiz "
         "qabul qilindi.\n\n"
-        "📅 20–22 oktabr 2026\n📍 SOF EXPO, Samarqand"
+        "📅 27–29 oktabr 2026\n📍 SOF EXPO, Samarqand"
     ),
     "support.line": "Savollar bo‘lsa: {username}",
     # ---------------------------------------------------------- lead card

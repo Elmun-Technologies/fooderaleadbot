@@ -24,6 +24,12 @@ from app.database.repository import LeadRepository
 
 logger = logging.getLogger(__name__)
 
+# Update previously seeded or admin-edited templates when the event schedule changes.
+EVENT_DATE_REPLACEMENTS = {
+    "20–22 oktabr 2026": "27–29 oktabr 2026",
+    "20–22 октября 2026": "27–29 октября 2026",
+}
+
 
 DEFAULT_TEMPLATES = [
     # Draft abandoned - UZ
@@ -35,7 +41,7 @@ DEFAULT_TEMPLATES = [
         "text": (
             "👋 Salom! Siz FOODERA EXPO 2026 uchun arizani to'ldirishni boshladingiz, lekin tugatmadigingiz.\n\n"
             "Davom etish uchun /start bosing - atigi 2 daqiqa!\n\n"
-            "📅 20–22 oktabr 2026\n📍 SOF EXPO, Samarqand"
+            "📅 27–29 oktabr 2026\n📍 SOF EXPO, Samarqand"
         ),
         "is_active": True,
         "priority": 10,
@@ -62,7 +68,7 @@ DEFAULT_TEMPLATES = [
         "text": (
             "👋 Здравствуйте! Вы начали заполнять заявку на FOODERA EXPO 2026, но не закончили.\n\n"
             "Продолжите: /start - всего 2 минуты!\n\n"
-            "📅 20–22 октября 2026\n📍 SOF EXPO, Самарканд"
+            "📅 27–29 октября 2026\n📍 SOF EXPO, Самарканд"
         ),
         "is_active": True,
         "priority": 10,
@@ -120,7 +126,7 @@ DEFAULT_TEMPLATES = [
             "2️⃣ Sizga mos stend variantlarini ko'rsatadi\n"
             "3️⃣ Shartnoma va to'lov\n\n"
             "Savollaringiz bo'lsa shu yerda yozing - tez javob beramiz!\n\n"
-            "📅 20–22 oktabr 2026 - SOF EXPO, Samarqand da ko'rishguncha!"
+            "📅 27–29 oktabr 2026 - SOF EXPO, Samarqand da ko'rishguncha!"
         ),
         "is_active": True,
         "priority": 10,
@@ -151,7 +157,7 @@ DEFAULT_TEMPLATES = [
             "2️⃣ Покажет подходящие варианты стендов\n"
             "3️⃣ Договор и оплата\n\n"
             "Если есть вопросы - пишите здесь!\n\n"
-            "📅 До встречи 20–22 октября 2026 - SOF EXPO, Самарканд!"
+            "📅 До встречи 27–29 октября 2026 - SOF EXPO, Самарканд!"
         ),
         "is_active": True,
         "priority": 10,
@@ -165,7 +171,7 @@ DEFAULT_TEMPLATES = [
         "text": (
             "👤 Mehmon sifatida ro'yxatdan o'tganingiz uchun rahmat!\n\n"
             "🎟 Sizni FOODERA EXPO 2026 da kutamiz:\n"
-            "📅 20–22 oktabr 2026\n"
+            "📅 27–29 oktabr 2026\n"
             "📍 SOF EXPO, Samarqand\n\n"
             "Dastur, ishtirokchilar ro'yxati va B2B uchrashuvlar tez orada e'lon qilinadi.\n"
             "Yangiliklarni o'tkazib yubormaslik uchun kanalimizga obuna bo'ling!"
@@ -197,7 +203,7 @@ DEFAULT_TEMPLATES = [
         "text": (
             "👤 Спасибо за регистрацию как гость!\n\n"
             "🎟 Ждем вас на FOODERA EXPO 2026:\n"
-            "📅 20–22 октября 2026\n"
+            "📅 27–29 октября 2026\n"
             "📍 SOF EXPO, Самарканд\n\n"
             "Программа, список участников и B2B встречи скоро будут объявлены."
         ),
@@ -272,10 +278,20 @@ class FollowUpService:
     async def ensure_default_templates(self):
         existing = await self.repo.list_followup_templates()
         if existing:
+            updated = 0
+            for template in existing:
+                text = template.text or ""
+                updated_text = text
+                for old_date, new_date in EVENT_DATE_REPLACEMENTS.items():
+                    updated_text = updated_text.replace(old_date, new_date)
+                if updated_text != text:
+                    await self.repo.update_followup_template(template.id, text=updated_text)
+                    updated += 1
+            if updated:
+                logger.info("updated event dates in %s follow-up templates", updated)
             return
         for data in DEFAULT_TEMPLATES:
             await self.repo.create_followup_template(**data)
-        logger = logging.getLogger(__name__)
         logger.info("created %s default follow-up templates", len(DEFAULT_TEMPLATES))
 
     async def schedule_due_followups(self) -> int:
