@@ -417,7 +417,8 @@ fly secrets set BOT_TOKEN="123456:ABC..." \
                 SUPPORT_USERNAME="foodera_support" \
                 QUALIFY_MIN_CLASSIFICATION="warm"
 
-# 3. ship it
+# 3. make sure this checkout really has the simplified questionnaire, then ship it
+python scripts/check_questionnaire.py     # exits 1 and refuses if the funnel is the old one
 fly deploy && fly logs
 ```
 
@@ -479,7 +480,7 @@ job, which is fewer ways to lose leads during the campaign.
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 
-python -m pytest tests -q      # 394 tests, SQLite in-process, no network
+python -m pytest tests -q      # 397 tests, SQLite in-process, no network
 python -m pytest tests/test_journey.py -q   # the end-to-end conversation
 ruff check app/flow.py app/options.py app/keyboards app/handlers/engine.py \
            app/handlers/start.py app/handlers/language.py app/handlers/visitor.py \
@@ -488,6 +489,7 @@ ruff check app/flow.py app/options.py app/keyboards app/handlers/engine.py \
 ruff format --check app/flow.py app/options.py app/keyboards app/handlers/engine.py \
                     app/services app/i18n scripts tests
 python scripts/demo_run.py --lang ru        # look at the copy without Telegram
+python scripts/check_questionnaire.py       # pre-deploy gate: is this tree the new funnel?
 alembic upgrade head && alembic downgrade base   # the migration is reversible
 ```
 
@@ -520,7 +522,7 @@ app/
   bot.py / main.py     assembly and entry point
 Dockerfile / fly.toml  container + Fly.io worker (no public port)
 alembic/               one reversible migration
-scripts/demo_run.py    offline preview of copy, scoring and cards
+scripts/               demo_run.py (offline preview) + check_questionnaire.py (deploy gate)
 tests/                 unit tests + test_journey.py (real updates through the real routers)
 ```
 
