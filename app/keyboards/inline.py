@@ -70,9 +70,14 @@ def single_choice_kb(
     skip: bool = False,
     manual: bool = False,
     current: str | None = None,
+    only: tuple[str, ...] | None = None,
 ) -> InlineKeyboardMarkup:
-    """One question, buttons for every option of an option group."""
-    options = list(OPTION_GROUPS[group])
+    """One question, buttons for every option of an option group.
+
+    ``only`` restricts the rendered values (the first question offers two answers to new
+    users, while the full option group keeps validating legacy callbacks).
+    """
+    options = [option for option in OPTION_GROUPS[group] if only is None or option.value in only]
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     for option in options:

@@ -9,7 +9,6 @@ a handler.
 from __future__ import annotations
 
 import logging
-import re
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
@@ -29,6 +28,7 @@ from app.config import Settings
 from app.database.models import Lead
 from app.database.repository import LeadRepository
 from app.flow import (
+    REGION_STEPS,
     STEPS,
     Step,
     StepError,
@@ -42,9 +42,9 @@ from app.flow import (
 from app.i18n import t
 from app.keyboards.inline import category_kb, choice_value, question_kb, single_choice_kb
 from app.keyboards.reply import phone_nav_action, phone_reply_kb, remove_reply_kb
-from app.options import OnlinePresence, Region
+from app.options import Region
 from app.services.lead_service import FinalizeResult, LeadService
-from app.services.parsing import parse_contact_line, split_links
+from app.services.parsing import parse_contact_line
 from app.utils.phone import normalize_phone
 from app.utils.text import clean_text, esc
 
@@ -116,9 +116,6 @@ class Render:
 
 def _current_value(lead: Lead, step: Step) -> str | None:
     """Previously stored answer, so "Back" shows what the user picked before."""
-    if step.kind is StepKind.URL:
-        parts = [part for part in (lead.website, lead.instagram) if part]
-        return " · ".join(parts) if parts else None
     if not step.fields:
         return None
     value = getattr(lead, step.fields[0], None)
@@ -146,7 +143,7 @@ def build_question(
 
     if step.hint_key:
         lines.append(f"<i>{esc(t(step.hint_key, lang))}</i>")
-    if current and step.kind in (StepKind.TEXT, StepKind.URL, StepKind.PHONE):
+    if current and step.kind in (StepKind.TEXT, StepKind.PHONE):
         lines.append(f"<i>{esc(t('info.current', lang, value=current))}</i>")
 
     keyboard: InlineKeyboardMarkup | None = None
@@ -161,12 +158,13 @@ def build_question(
             back=step.allow_back,
             skip=step.optional,
             current=current,
+            only=step.options,
         )
     elif step.kind is StepKind.CATEGORY:
         keyboard, _, _ = category_kb(lang, page=page, current=current, back=step.allow_back)
     elif step.kind is StepKind.PHONE:
         reply_keyboard = phone_reply_kb(lang)
-    else:  # TEXT / URL
+    else:  # TEXT
         keyboard = question_kb(lang, back=step.allow_back, skip=step.optional)
 
     if error:
@@ -183,36 +181,16 @@ def apply_inline_answer(step: Step, value: str, lead: Lead) -> dict[str, Any]:
 
     if step.key == "intent":
         return {"intent": value}
-    if step.key == "region":
+    if step.key in REGION_STEPS:
         # switching away from "outside Uzbekistan" must not keep a stale country
         keep_country = value == Region.FOREIGN.value
         return {"region": value, "country": lead.country if keep_country else None}
-    if step.key == "online":
-        if value == OnlinePresence.NONE.value:
-            return {"online_presence": value, "website": None, "instagram": None}
-        return {"online_presence": value}
     field = step.fields[0]
     return {field: value}
 
 
 def apply_text_answer(step: Step, text: str, lead: Lead | None = None) -> dict[str, Any]:
-    """Validate + map free-text answers (company name, contact line, links, phone)."""
-    if step.kind is StepKind.URL:
-        website, instagram = split_links(text)
-        if website is None and instagram is None:
-            # someone who tapped "Instagram bor" often types a bare handle
-            claimed = str(lead.online_presence or "") if lead is not None else ""
-            handle = (text or "").strip().lstrip("@")
-            if claimed in {
-                OnlinePresence.INSTAGRAM.value,
-                OnlinePresence.BOTH.value,
-            } and re.fullmatch(r"[\w.]{2,32}", handle):
-                return {"instagram": f"@{handle}"}
-            raise StepError("err.url_format")
-        if claimed_instagram_only(lead) and website and not instagram:
-            instagram, website = website, None
-        return {"website": website, "instagram": instagram}
-
+    """Validate + map free-text answers (company name, country, contact line, phone)."""
     if step.kind is StepKind.PHONE:
         return apply_phone(text)
 
@@ -226,13 +204,6 @@ def apply_text_answer(step: Step, text: str, lead: Lead | None = None) -> dict[s
         return {"contact_name": clean_text(cleaned, max_len=120)}
     field = step.fields[0] if step.fields else "company_name"
     return {field: cleaned}
-
-
-def claimed_instagram_only(lead: Lead | None) -> bool:
-    """The user said "Instagram bor" and pasted one link: it is the Instagram one."""
-    return bool(
-        lead is not None and str(lead.online_presence or "") == OnlinePresence.INSTAGRAM.value
-    )
 
 
 def apply_phone(raw: str | None) -> dict[str, Any]:
@@ -461,7 +432,7 @@ async def handle_category_page(callback: CallbackQuery, data: dict[str, Any]) ->
 
 
 async def handle_text(message: Message, data: dict[str, Any]) -> None:
-    """Free-text answers: company name, contact line, country, links, phone."""
+    """Free-text answers: company name, contact line, country, phone."""
     ctx = await require_context(message, data)
     if ctx is None:
         return

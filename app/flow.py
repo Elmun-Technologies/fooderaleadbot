@@ -5,6 +5,16 @@ thin and makes Back / Skip / progress counters / resume-after-restart trivial:
 ``steps_for(lead)`` computes the concrete question list for a lead (conditional
 questions such as ``country`` are inserted on demand), and navigation is just an
 index lookup in that list.
+
+The 2026 campaign funnel is deliberately short:
+
+* the first question offers two answers only - ``stand`` (stend bilan qatnashish) and
+  ``visitor`` (mehmon sifatida kelish); the legacy ``pricing`` / ``partner`` intents
+  are no longer advertised but stay valid for records collected earlier;
+* exhibitors answer nine questions and are **not** asked about a website, Instagram or
+  any other online presence any more (the corresponding database columns are kept for
+  the leads that were collected before);
+* visitors answer four questions: intent, name, optional phone, region.
 """
 
 from __future__ import annotations
@@ -13,14 +23,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
-from app.options import Intent, OnlinePresence, values_of
+from app.options import NEW_USER_INTENTS, Intent, values_of
 
 __all__ = [
     "EXHIBITOR_PATH",
     "FOREIGN_REGIONS",
     "PARTNER_PATH",
+    "REGION_STEPS",
     "STEPS",
-    "URL_PRESENCES",
     "VISITOR_PATH",
     "Step",
     "StepError",
@@ -39,7 +49,6 @@ class StepKind(StrEnum):
     INLINE = "inline"  # one option from an option group
     CATEGORY = "category"  # paginated option group
     TEXT = "text"  # free text, length validated
-    URL = "url"  # website / instagram links
     PHONE = "phone"  # Telegram contact button or manual input
 
 
@@ -50,6 +59,7 @@ class Step:
     question_key: str
     group: str | None = None  # option group (INLINE / CATEGORY)
     fields: tuple[str, ...] = ()  # lead fields written by this step
+    options: tuple[str, ...] | None = None  # restrict the offered group values
     hint_key: str | None = None
     error_key: str = "err.too_short"
     min_len: int | None = None
@@ -64,31 +74,29 @@ def _step(key: str, kind: StepKind, question: str, **kwargs: object) -> Step:
     return Step(key=key, kind=kind, question_key=f"q.{question}", **kwargs)  # type: ignore[arg-type]
 
 
-#: exhibitor funnel (Q1..Q10 of the specification)
+#: exhibitor funnel (nine questions, no online-presence / links question any more)
 EXHIBITOR_PATH: tuple[str, ...] = (
     "intent",
     "company_type",
     "category",
     "company_name",
     "region",
-    "online",
-    "url",
     "contact",
     "phone",
     "stand",
     "readiness",
 )
 
-#: partnership enquiries are real leads, but they do not buy a stand -> Q9 is skipped
+#: partnership enquiries are real leads, but they do not buy a stand -> Q8 is skipped.
+#: ``partner`` is a legacy answer: it is no longer offered to new users.
 PARTNER_PATH: tuple[str, ...] = tuple(key for key in EXHIBITOR_PATH if key != "stand")
 
-#: visitors never see exhibitor questions
+#: visitors never see exhibitor questions - intent, name, optional phone, region
 VISITOR_PATH: tuple[str, ...] = (
     "intent",
     "visitor_name",
     "visitor_phone",
-    "region",
-    "visitor_relation",
+    "visitor_region",
 )
 
 STEPS: dict[str, Step] = {
@@ -100,6 +108,8 @@ STEPS: dict[str, Step] = {
             "intent",
             group="intent",
             fields=("intent",),
+            # new users choose between the two real funnels only
+            options=NEW_USER_INTENTS,
             allow_back=False,
         ),
         _step(
@@ -138,25 +148,6 @@ STEPS: dict[str, Step] = {
             max_len=60,
             hint_key="hint.country",
             error_key="err.country_len",
-        ),
-        _step(
-            "online",
-            StepKind.INLINE,
-            "online",
-            group="online",
-            fields=("online_presence",),
-            columns=2,
-        ),
-        _step(
-            "url",
-            StepKind.URL,
-            "url",
-            fields=("website", "instagram"),
-            optional=True,
-            min_len=2,
-            max_len=600,
-            hint_key="hint.url",
-            error_key="err.url_format",
         ),
         _step(
             "contact",
@@ -205,19 +196,18 @@ STEPS: dict[str, Step] = {
             error_key="err.phone_format",
         ),
         _step(
-            "visitor_relation",
+            "visitor_region",
             StepKind.INLINE,
-            "v_relation",
-            group="relation",
-            fields=("business_relation",),
+            "v_region",
+            group="region",
+            fields=("region",),
+            columns=2,
         ),
     )
 }
 
-#: online-presence answers that lead to the follow-up URL question
-URL_PRESENCES: frozenset[str] = frozenset(
-    {OnlinePresence.WEBSITE, OnlinePresence.INSTAGRAM, OnlinePresence.BOTH}
-)
+#: steps whose answer decides whether the follow-up "which country?" question appears
+REGION_STEPS: frozenset[str] = frozenset({"region", "visitor_region"})
 
 #: after this region we ask the follow-up "which country?" question
 FOREIGN_REGIONS: frozenset[str] = frozenset({"foreign"})
@@ -242,10 +232,8 @@ def steps_for(lead: Mapping[str, object]) -> list[str]:
         # jump on the very first question
         if key == "stand" and intent is not None and intent not in _stand_intents():
             continue
-        if key == "url" and lead.get("online_presence") not in URL_PRESENCES:
-            continue
         steps.append(key)
-        if key == "region" and lead.get("region") in FOREIGN_REGIONS:
+        if key in REGION_STEPS and lead.get("region") in FOREIGN_REGIONS:
             steps.append("country")
     return steps
 
@@ -270,11 +258,9 @@ def next_step(current: str, lead: Mapping[str, object]) -> str | None:
         return steps[0] if steps else None
     if index + 1 < len(steps):
         return steps[index + 1]
-    # conditional steps that only appear after the answer is saved
-    if current == "region" and lead.get("region") in FOREIGN_REGIONS:
+    # conditional steps that only appear once the answer is saved
+    if current in REGION_STEPS and lead.get("region") in FOREIGN_REGIONS:
         return "country"
-    if current == "online" and lead.get("online_presence") in URL_PRESENCES:
-        return "url"
     return None
 
 

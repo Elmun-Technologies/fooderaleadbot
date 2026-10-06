@@ -1,7 +1,7 @@
 """Full lead journey through the real aiogram routers.
 
 Nothing is mocked except the Telegram HTTP layer: a recording ``BaseSession`` stands in
-for the Bot API, so ``/start`` -> language -> 10 questions -> qualification -> sales-group
+for the Bot API, so ``/start`` -> language -> 9 questions -> qualification -> sales-group
 card -> manager taps "booked" is exercised end to end (routers, middlewares, FSM, DB).
 """
 
@@ -333,7 +333,7 @@ class Harness:
 
 
 async def complete_questionnaire(harness: Harness, *, readiness: str = "ready_to_book") -> None:
-    """Drive the exhibitor funnel from /start to the last question."""
+    """Drive the simplified exhibitor funnel from /start to the last question."""
     await harness.send("/start tgads_foodera_uz_01")
     await harness.press("lang:uz")
     await harness.press("flow:start")
@@ -342,8 +342,6 @@ async def complete_questionnaire(harness: Harness, *, readiness: str = "ready_to
     await harness.press("q:category:confectionery_and_bakery")
     await harness.send("SAMARQAND FOOD LLC")
     await harness.press("q:region:samarkand")
-    await harness.press("q:online:both")
-    await harness.send("samarqandfood.uz\n@samarqand_food")
     await harness.send("Azizbek — Savdo direktori")
     await harness.send(contact_phone="+998 90 123 45 67")
     await harness.press("q:stand:size_18")
@@ -395,8 +393,10 @@ class TestJourney:
         assert lead.phone == "+998901234567"
         assert lead.contact_name == "Azizbek"
         assert lead.position == "Savdo direktori"
-        assert lead.website == "samarqandfood.uz"
-        assert lead.instagram == "@samarqand_food"
+        # the simplified funnel never asks for links: nothing is written to the legacy columns
+        assert lead.website is None
+        assert lead.instagram is None
+        assert lead.online_presence is None
         assert lead.preferred_stand_size == "size_18"
         assert lead.completed_at is not None
         assert lead.is_draft is False
@@ -418,13 +418,16 @@ class TestJourney:
         await harness.send("/start")
         await harness.press("lang:uz")
         await harness.press("flow:start")
-        assert "Savol 1/10" in session.last_text()
-        await harness.press("q:intent:pricing")
-        assert "Savol 2/10" in session.last_text()
+        assert "Savol 1/9" in session.last_text()
+        # the first question offers exactly two answers
+        assert session.last_keyboard_callbacks() == ["q:intent:stand", "q:intent:visitor"]
+        await harness.press("q:intent:stand")
+        assert "Savol 2/9" in session.last_text()
 
-    async def test_pricing_intent_still_gets_the_stand_question(
+    async def test_legacy_pricing_callback_still_works_on_an_old_card(
         self, harness: Harness, session: RecordingSession, repo: LeadRepository
     ) -> None:
+        """``pricing`` is not offered any more, but an old card must not break the flow."""
         await harness.send("/start tgads_foodera_ru_01")
         await harness.press("lang:ru")
         await harness.press("flow:start")
@@ -433,10 +436,11 @@ class TestJourney:
         await harness.press("q:category:frozen_and_semi_finished")
         await harness.send("Distributor ACME")
         await harness.press("q:region:tashkent")
-        await harness.press("q:online:none")
         await harness.send("Dilnoza — Menecer")
         await harness.send(contact_phone="+998901112233")
         assert "формат стенда" in session.last_text()
+        lead = (await repo.list_leads(only_completed=False))[0]
+        assert lead.intent == "pricing"  # the legacy answer is stored as such
 
     async def test_visitor_journey_is_not_sent_to_the_sales_group(
         self, harness: Harness, session: RecordingSession, repo: LeadRepository, settings
@@ -449,8 +453,10 @@ class TestJourney:
 
         await harness.send("Malika")
         await harness.send(contact_phone="+998905554433")
-        await harness.press("q:region:tashkent")
-        await harness.press("q:visitor_relation:student")
+        # the visitor flow ends with the region: no industry question any more
+        assert "Qaysi hududdansiz?" in session.last_text()
+        assert "Savol 4/4" in session.last_text()
+        await harness.press("q:visitor_region:tashkent")
 
         assert session.sent_to(settings.sales_group_id) == []
         leads = await repo.list_leads()
@@ -458,6 +464,7 @@ class TestJourney:
         assert leads[0].classification == Classification.VISITOR.value
         assert leads[0].lead_type == "visitor"
         assert leads[0].preferred_stand_size is None
+        assert leads[0].business_relation is None
         assert "mehmon" in session.sent_to(PRIVATE_CHAT)[-1].lower()
 
     async def test_back_button_returns_to_the_previous_question(
@@ -484,10 +491,8 @@ class TestJourney:
         await harness.press("q:category:grocery")
         await harness.send("ACME")
         await harness.press("q:region:samarkand")
-        await harness.press("q:online:website")
-        await harness.press("nav:skip")  # no link shared
         await harness.send("Aziz")
-        await harness.press("nav:skip")  # no phone
+        await harness.press("nav:skip")  # no phone: the step is optional
         assert "Qaysi format" in session.last_text()
 
     async def test_invalid_text_is_rejected_and_asked_again(
@@ -655,3 +660,43 @@ class TestJourney:
             "NOTIFICATION_SENT",
         ):
             assert expected in names, f"{expected} missing from {names}"
+
+    async def test_new_leads_are_not_asked_for_links_anymore(
+        self, harness: Harness, session: RecordingSession, repo: LeadRepository, settings
+    ) -> None:
+        await complete_questionnaire(harness)
+        lead = (await repo.list_leads())[0]
+        assert lead.website is None and lead.instagram is None
+        assert lead.online_presence is None
+
+        card = session.sent_to(settings.sales_group_id)[-1]
+        assert "Instagram" not in card and "🌐 Sayt" not in card
+        # the funnel log has no ONLINE_ENTERED step either
+        events = [event.event for event in await repo.events_for_lead(lead.id)]
+        assert "ONLINE_ENTERED" not in events
+
+    async def test_admin_lead_detail_shows_legacy_answers_only_when_they_exist(
+        self, harness: Harness, session: RecordingSession, repo: LeadRepository
+    ) -> None:
+        await complete_questionnaire(harness)
+        lead = (await repo.list_leads())[0]
+        admin = {"id": 111, "is_bot": False, "first_name": "Admin", "username": "admin"}
+
+        await harness.send(f"/lead {lead.lead_code}", chat_id=111, user=admin)
+        report = session.sent_to(111)[-1]
+        assert "Intent: <b>Kompaniyamiz bilan stendda qatnashmoqchimiz</b>" in report
+        assert "Website" not in report and "Instagram" not in report and "Relation" not in report
+
+        # a record from before the simplification keeps its answers - and shows them
+        await repo.update_lead(
+            lead.id,
+            intent="pricing",
+            website="legacy.uz",
+            instagram="@legacy",
+            business_relation="retail",
+        )
+        await harness.send(f"/lead {lead.lead_code}", chat_id=111, user=admin)
+        legacy = session.sent_to(111)[-1]
+        assert "Stendlar va narxlar" in legacy
+        assert "legacy.uz" in legacy and "@legacy" in legacy
+        assert "Retail / savdo" in legacy

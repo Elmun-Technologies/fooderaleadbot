@@ -20,13 +20,22 @@
                     <div><span class="text-gray-500">Kompaniya:</span> <span class="font-medium">{{ lead.company_name or '-' }}</span></div>
                     <div><span class="text-gray-500">Kontakt:</span> <span class="font-medium">{{ lead.contact_name or '-' }} {{ lead.position or '' }}</span></div>
                     <div><span class="text-gray-500">Telefon:</span> <span class="font-medium">{{ lead.phone or '-' }}</span></div>
+                    <div><span class="text-gray-500">Maqsad:</span> <span class="font-medium">{{ lead.intent or '-' }}</span></div>
                     <div><span class="text-gray-500">Hudud:</span> <span class="font-medium">{{ lead.region or '' }} {{ lead.country or '' }}</span></div>
                     <div><span class="text-gray-500">Turi:</span> <span class="font-medium">{{ lead.company_type or '-' }}</span></div>
                     <div><span class="text-gray-500">Yo'nalish:</span> <span class="font-medium">{{ lead.category or '-' }}</span></div>
                     <div><span class="text-gray-500">Stend:</span> <span class="font-medium">{{ lead.preferred_stand_size or '-' }}</span></div>
                     <div><span class="text-gray-500">Tayyorlik:</span> <span class="font-medium">{{ lead.readiness or '-' }}</span></div>
-                    <div><span class="text-gray-500">Sayt:</span> <span class="font-medium">{{ lead.website or '-' }}</span></div>
-                    <div><span class="text-gray-500">Instagram:</span> <span class="font-medium">{{ lead.instagram or '-' }}</span></div>
+                    {# legacy answers: only shown for leads collected before the questionnaire was simplified #}
+                    {% if lead.website %}
+                    <div><span class="text-gray-500">Sayt:</span> <span class="font-medium">{{ lead.website }}</span></div>
+                    {% endif %}
+                    {% if lead.instagram %}
+                    <div><span class="text-gray-500">Instagram:</span> <span class="font-medium">{{ lead.instagram }}</span></div>
+                    {% endif %}
+                    {% if lead.business_relation %}
+                    <div><span class="text-gray-500">Sanoat bilan aloqa:</span> <span class="font-medium">{{ lead.business_relation }}</span></div>
+                    {% endif %}
                     <div><span class="text-gray-500">Manba:</span> <span class="font-medium">{{ lead.source or '' }} / {{ lead.campaign or '' }} / {{ lead.creative or '' }}</span></div>
                     <div><span class="text-gray-500">Til:</span> <span class="font-medium">{{ lead.language }}</span></div>
                     <div><span class="text-gray-500">Telegram:</span> <span class="font-medium">@{{ lead.telegram_username or lead.telegram_user_id }}</span></div>

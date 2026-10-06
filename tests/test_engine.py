@@ -6,7 +6,7 @@ import pytest
 from app.database.models import Lead, LeadType
 from app.flow import StepError, StepKind
 from app.handlers.engine import apply_inline_answer, apply_phone, apply_text_answer, build_question
-from app.options import Intent, OnlinePresence, Region
+from app.options import Intent, Region
 
 
 def lead(**values: object) -> Lead:
@@ -45,6 +45,19 @@ class TestRendering:
         callbacks = [b.callback_data for row in render.keyboard.inline_keyboard for b in row]
         assert "nav:back" not in callbacks
 
+    def test_first_question_offers_only_stand_and_visitor(self) -> None:
+        render = build_question(lead(intent=None), "intent", "uz")
+        callbacks = [
+            b.callback_data
+            for row in render.keyboard.inline_keyboard
+            for b in row
+            if b.callback_data
+        ]
+        assert callbacks == ["q:intent:stand", "q:intent:visitor"]
+        labels = " ".join(b.text or "" for row in render.keyboard.inline_keyboard for b in row)
+        assert "stendda" in labels and "Mehmon" in labels
+        assert "narx" not in labels.lower() and "Hamkorlik" not in labels
+
     def test_phone_step_uses_a_reply_keyboard(self) -> None:
         render = build_question(lead(), "phone", "uz")
         assert render.reply_keyboard is not None
@@ -52,9 +65,9 @@ class TestRendering:
         assert first_row[0].request_contact is True
 
     def test_optional_steps_offer_skip(self) -> None:
-        render = build_question(lead(), "url", "uz")
-        callbacks = [b.callback_data for row in render.keyboard.inline_keyboard for b in row]
-        assert "nav:skip" in callbacks
+        render = build_question(lead(), "visitor_phone", "uz")
+        labels = [b.text or "" for row in render.reply_keyboard.keyboard for b in row]
+        assert any("O‘tkazish" in label for label in labels)
 
     def test_category_keyboard_is_paginated(self) -> None:
         render = build_question(lead(), "category", "uz")
@@ -101,13 +114,17 @@ class TestInlineAnswerMapping:
         foreign = apply_inline_answer(STEPS["region"], Region.FOREIGN, lead(country="Kazakhstan"))
         assert foreign == {"region": Region.FOREIGN, "country": "Kazakhstan"}
 
-    def test_declining_online_presence_clears_links(self) -> None:
+    def test_visitor_region_uses_the_same_country_rule(self) -> None:
         from app.flow import STEPS
 
-        values = apply_inline_answer(
-            STEPS["online"], OnlinePresence.NONE, lead(website="a.uz", instagram="@a")
+        local = apply_inline_answer(
+            STEPS["visitor_region"], Region.TASHKENT, lead(country="Kazakhstan")
         )
-        assert values == {"online_presence": "none", "website": None, "instagram": None}
+        assert local == {"region": Region.TASHKENT, "country": None}
+        foreign = apply_inline_answer(
+            STEPS["visitor_region"], Region.FOREIGN, lead(country="Kazakhstan")
+        )
+        assert foreign == {"region": Region.FOREIGN, "country": "Kazakhstan"}
 
     def test_forged_callback_value_is_rejected(self) -> None:
         from app.flow import STEPS
@@ -143,19 +160,6 @@ class TestTextAnswerMapping:
         assert values["contact_name"] == "Azizbek Karimov"
         assert values["position"] is None
 
-    def test_url_answer_is_split_into_two_fields(self) -> None:
-        from app.flow import STEPS
-
-        values = apply_text_answer(STEPS["url"], "food.uz\n@food")
-        assert values == {"website": "food.uz", "instagram": "@food"}
-
-    def test_garbage_url_is_rejected(self) -> None:
-        from app.flow import STEPS
-
-        with pytest.raises(StepError) as exc:
-            apply_text_answer(STEPS["url"], "yo'q")
-        assert exc.value.message_key == "err.url_format"
-
     def test_short_company_name_is_rejected_with_a_localized_key(self) -> None:
         from app.flow import STEPS
 
@@ -186,10 +190,10 @@ class TestStepKinds:
             ("intent", StepKind.INLINE),
             ("category", StepKind.CATEGORY),
             ("company_name", StepKind.TEXT),
-            ("url", StepKind.URL),
             ("phone", StepKind.PHONE),
             ("visitor_name", StepKind.TEXT),
             ("visitor_phone", StepKind.PHONE),
+            ("visitor_region", StepKind.INLINE),
         ],
     )
     def test_kinds(self, step_key: str, kind: StepKind) -> None:

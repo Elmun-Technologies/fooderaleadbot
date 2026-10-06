@@ -36,6 +36,10 @@ logger = logging.getLogger(__name__)
 
 #: the ONLY lead fields the questionnaire may write.  Scores, statuses, attribution and
 #: timestamps are owned by the services - a forged callback can never touch them.
+#:
+#: ``online_presence``, ``website``, ``instagram`` and ``business_relation`` are **legacy**
+#: answers: the simplified questionnaire never asks for them, but the columns (and any
+#: value collected earlier) are kept, so old leads stay complete and readable.
 QUESTION_FIELDS: frozenset[str] = frozenset(
     {
         "intent",
@@ -44,15 +48,15 @@ QUESTION_FIELDS: frozenset[str] = frozenset(
         "company_name",
         "region",
         "country",
-        "online_presence",
-        "website",
-        "instagram",
         "contact_name",
         "position",
         "phone",
         "preferred_stand_size",
         "readiness",
-        "business_relation",
+        "online_presence",  # legacy
+        "website",  # legacy
+        "instagram",  # legacy
+        "business_relation",  # legacy
         "lead_type",
     }
 )
@@ -278,12 +282,20 @@ class LeadService:
         )
 
     async def resume_step(self, lead: Lead) -> str:
-        """Which question to show when a draft is resumed (after a restart, etc.)."""
+        """Which question to show when a draft is resumed (after a restart, etc.).
+
+        Legacy drafts may sit on a step that no longer exists (``online``, ``url``,
+        ``visitor_relation``): it is not in the path any more, so the user is moved to the
+        first question of the simplified funnel that still needs an answer.  A draft whose
+        answers are already complete lands on the last question, where it can be finished.
+        """
         if lead.current_step and lead.current_step in STEPS:
             steps = steps_for(lead.field_values())
             if lead.current_step in steps:
                 return lead.current_step
-        return first_unanswered_step(lead.field_values()) or "intent"
+        answers = lead.field_values()
+        path = steps_for(answers)
+        return first_unanswered_step(answers) or (path or ["intent"])[-1]
 
     # ---------------------------------------------------------------- answers
     async def save_answer(
@@ -336,16 +348,14 @@ class LeadService:
             "category": FunnelEvent.CATEGORY_SELECTED.value,
             "company_name": FunnelEvent.COMPANY_ENTERED.value,
             "region": FunnelEvent.LOCATION_ENTERED.value,
+            "visitor_region": FunnelEvent.LOCATION_ENTERED.value,
             "country": FunnelEvent.LOCATION_ENTERED.value,
-            "online": FunnelEvent.ONLINE_ENTERED.value,
-            "url": FunnelEvent.ONLINE_ENTERED.value,
             "contact": FunnelEvent.CONTACT_ENTERED.value,
             "phone": FunnelEvent.PHONE_ENTERED.value,
             "stand": FunnelEvent.STAND_SELECTED.value,
             "readiness": FunnelEvent.READINESS_SELECTED.value,
             "visitor_name": FunnelEvent.CONTACT_ENTERED.value,
             "visitor_phone": FunnelEvent.PHONE_ENTERED.value,
-            "visitor_relation": FunnelEvent.INTENT_SELECTED.value,
         }.get(step_key, step_key.upper())
 
     async def mark_skipped(self, lead: Lead, step_key: str) -> None:

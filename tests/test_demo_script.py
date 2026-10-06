@@ -40,8 +40,17 @@ class TestDemoScript:
         out = run("--intent", "visitor", "--lang", "ru")
         assert "Score:" not in out, "visitors are never scored, not even in the preview"
         assert "Стенд" not in out, "the stand block does not exist for visitors"
+        assert "Связь с индустрией" not in out, "the industry question is gone"
         assert "no score, no stand data" in out
 
+    def test_the_exhibitor_preview_never_asks_for_links_any_more(self) -> None:
+        out = run("--lang", "uz")
+        assert "sayt" not in out.lower(), "the website / Instagram question is gone"
+        assert "Instagram" not in out
+        assert "Savol 1/9" in out
+
     def test_arguments_are_accepted(self) -> None:
-        assert "── scoring (ru)" in run("--lang", "ru", "--intent", "pricing")
+        assert "── scoring (ru)" in run("--lang", "ru")
         assert "── scoring (uz)" in run("--lang", "uz")
+        # pricing / partner are legacy answers: they are no longer advertised, not even here
+        assert "--intent" in run("--help") and "pricing" not in run("--help")

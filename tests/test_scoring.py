@@ -23,7 +23,6 @@ def base(**overrides: object) -> LeadAnswers:
         "contact_name": "Azizbek",
         "position": "Savdo direktori",
         "phone": "+998901234567",
-        "website": "samarqandfood.uz",
         "preferred_stand_size": StandSize.SIZE_18,
         "readiness": Readiness.REVIEW_OPTIONS,
     }
@@ -65,20 +64,20 @@ class TestCompanyTypeWeights:
         assert score_lead(LeadAnswers(company_type=company_type)).score == points
 
 
-class TestCategoryVerificationContactStandReadiness:
+class TestCategoryContactStandReadiness:
     def test_valid_category_is_10_other_is_2(self) -> None:
         assert score_lead(LeadAnswers(category=Category.DAIRY_AND_CHEESE)).score == 10
         assert score_lead(LeadAnswers(category=Category.OTHER)).score == 2
         assert score_lead(LeadAnswers(category=None)).score == 0
 
-    def test_online_presence(self) -> None:
-        assert score_lead(LeadAnswers(website="site.uz")).score == 8
-        assert score_lead(LeadAnswers(instagram="@site")).score == 8
-        assert score_lead(LeadAnswers(website="site.uz", instagram="@site")).score == 10
-        assert score_lead(LeadAnswers()).score == 0
-
-    def test_whitespace_only_links_do_not_count(self) -> None:
-        assert score_lead(LeadAnswers(website="   ", instagram=" ")).score == 0
+    def test_legacy_link_answers_do_not_score(self) -> None:
+        """The simplified questionnaire does not ask for links, so they cannot count."""
+        legacy = LeadAnswers.from_mapping(
+            {"intent": Intent.STAND, "website": "site.uz", "instagram": "@site"}
+        )
+        result = score_lead(legacy)
+        assert result.score == 30  # intent only
+        assert "verification" not in result.breakdown_dict()
 
     def test_contact_name_plus_position_and_phone(self) -> None:
         assert score_lead(LeadAnswers(contact_name="Aziz", position="Direktor")).score == 5
@@ -113,34 +112,31 @@ class TestCategoryVerificationContactStandReadiness:
 
 class TestFullLead:
     def test_exhibitor_profile_sums_exactly_as_documented(self) -> None:
-        """30 + 20 + 10 + 8 + 5 + 10 + 6 + 15 = 104 -> capped to 100."""
+        """30 + 20 + 10 + 5 + 10 + 6 + 15 = 96 (no online-presence block any more)."""
         result = score_lead(base())
         assert result.breakdown_dict() == {
             "intent": 30,
             "company_type": 20,
             "category": 10,
-            "verification": 8,
             "contact_quality": 5,
             "phone": 10,
             "stand_size": 6,
             "readiness": 15,
         }
-        assert result.score == MAX_SCORE
+        assert result.score == 96
 
     def test_max_score_is_capped(self) -> None:
         loudest_possible = LeadAnswers(
             intent=Intent.STAND,
             company_type=CompanyType.MANUFACTURER,
             category=Category.FISH_AND_SEAFOOD,
-            website="a.uz",
-            instagram="@a",
             contact_name="A",
             position="B",
             phone="+998901234567",
             preferred_stand_size=StandSize.SIZE_36_PLUS,
             readiness=Readiness.READY_TO_BOOK,
         )
-        raw_sum = 30 + 20 + 10 + 10 + 5 + 10 + 10 + 20  # 115
+        raw_sum = 30 + 20 + 10 + 5 + 10 + 10 + 20  # 105
         assert raw_sum > MAX_SCORE
         assert score_lead(loudest_possible).score == MAX_SCORE
 
@@ -201,8 +197,6 @@ class TestClassification:
             intent=Intent.VISITOR,
             company_type=CompanyType.MANUFACTURER,
             category=Category.DAIRY_AND_CHEESE,
-            website="a.uz",
-            instagram="@a",
             contact_name="A",
             position="B",
             phone="+998901234567",
@@ -210,7 +204,7 @@ class TestClassification:
             readiness=Readiness.READY_TO_BOOK,
         )
         result = score_lead(loud_visitor)
-        assert result.score > 75  # score is real...
+        assert result.score >= 75  # score is real...
         assert (
             classify(result.score, intent=loud_visitor.intent) == "VISITOR"
         )  # ...but the class is not
