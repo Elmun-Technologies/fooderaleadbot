@@ -49,6 +49,10 @@ class TestCatalogParity:
 
 
 class TestCatalogCompleteness:
+    def test_event_dates_match_the_updated_schedule(self) -> None:
+        assert t("event.dates", "uz") == "📅 27–29 oktabr 2026"
+        assert t("event.dates", "ru") == "📅 27–29 октября 2026"
+
     @pytest.mark.parametrize("language", ["uz", "ru"])
     def test_every_question_has_a_text(self, language: str) -> None:
         for step_key, step in STEPS.items():
