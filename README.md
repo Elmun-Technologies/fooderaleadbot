@@ -480,7 +480,7 @@ job, which is fewer ways to lose leads during the campaign.
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 
-python -m pytest tests -q      # 397 tests, SQLite in-process, no network
+python -m pytest tests -q      # 398 tests, SQLite in-process, no network
 python -m pytest tests/test_journey.py -q   # the end-to-end conversation
 ruff check app/flow.py app/options.py app/keyboards app/handlers/engine.py \
            app/handlers/start.py app/handlers/language.py app/handlers/visitor.py \

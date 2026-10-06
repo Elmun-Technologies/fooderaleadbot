@@ -467,6 +467,27 @@ class TestJourney:
         assert leads[0].business_relation is None
         assert "mehmon" in session.sent_to(PRIVATE_CHAT)[-1].lower()
 
+    async def test_foreign_visitor_is_asked_for_the_country_then_finishes(
+        self, harness: Harness, session: RecordingSession, repo: LeadRepository
+    ) -> None:
+        await harness.send("/start")
+        await harness.press("lang:uz")
+        await harness.press("flow:start")
+        await harness.press("q:intent:visitor")
+        await harness.send("Malika")
+        await harness.send("O‘tkazish")  # the reply-keyboard Skip: the phone is optional
+        await harness.press("q:visitor_region:foreign")
+        assert "Mamlakatingizni yozing" in session.last_text()
+        assert "Savol 5/5" in session.last_text()
+
+        await harness.send("Qozog‘iston")
+        lead = (await repo.list_leads())[0]
+        assert lead.lead_type == "visitor"
+        assert lead.region == "foreign"
+        assert lead.country == "Qozog‘iston"
+        assert lead.phone is None
+        assert lead.completed_at is not None
+
     async def test_back_button_returns_to_the_previous_question(
         self, harness: Harness, session: RecordingSession
     ) -> None:
