@@ -14,6 +14,8 @@ from enum import StrEnum
 __all__ = [
     "EXHIBITOR_INTENTS",
     "LEAD_INTENTS",
+    "LEGACY_INTENTS",
+    "NEW_USER_INTENTS",
     "OPTION_GROUPS",
     "OTHER_VALUES",
     "Category",
@@ -119,6 +121,13 @@ class VisitorRelation(StrEnum):
 EXHIBITOR_INTENTS: frozenset[str] = frozenset({Intent.STAND, Intent.PRICING})
 #: intents handled by the sales team (exhibitors + partnership enquiries)
 LEAD_INTENTS: frozenset[str] = EXHIBITOR_INTENTS | {Intent.PARTNER}
+
+#: The two answers the first question offers to *new* users.  ``pricing`` and
+#: ``partner`` stay valid values (old drafts, old callbacks, existing leads in the
+#: database and on the cards), they are simply no longer advertised.
+NEW_USER_INTENTS: tuple[str, ...] = (Intent.STAND, Intent.VISITOR)
+#: intents that are kept for data collected before the questionnaire was simplified
+LEGACY_INTENTS: frozenset[str] = frozenset({Intent.PRICING, Intent.PARTNER})
 #: values that mean "not really a match" for scoring purposes
 OTHER_VALUES: frozenset[str] = frozenset({"other", "other_region"})
 
@@ -167,6 +176,9 @@ OPTION_GROUPS: dict[str, tuple[Option, ...]] = {
     ),
     "category": _group(Category),
     "region": _group(Region),
+    # legacy group: the questionnaire no longer asks about the online presence, but the
+    # values stored in ``leads.online_presence`` before the simplification are still
+    # rendered with these labels (admin, cards, exports).
     "online": _group(
         OnlinePresence,
         {OnlinePresence.INSTAGRAM: "📷", OnlinePresence.WEBSITE: "🌐", OnlinePresence.BOTH: "✨"},

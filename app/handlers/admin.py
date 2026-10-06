@@ -448,22 +448,39 @@ async def _lead_detail(repo: Any, args: str) -> str:
             ),
         ),
         ("Phone", clean_text(lead.phone or "-", max_len=32)),
+        ("Intent", option_label("intent", lead.intent, lang)),
         ("Region", option_label("region", lead.region, lang)),
-        ("Country", clean_text(lead.country or "-", max_len=60)),
-        ("Type", option_label("company_type", lead.company_type, lang)),
-        ("Category", option_label("category", lead.category, lang)),
-        ("Stand", option_label("stand", lead.preferred_stand_size, lang)),
-        ("Readiness", option_label("readiness", lead.readiness, lang)),
-        ("Relation", option_label("relation", lead.business_relation, lang)),
-        ("Website", clean_text(lead.website or "-", max_len=60)),
-        ("Instagram", clean_text(lead.instagram or "-", max_len=60)),
-        ("Source", f"{lead.source} / {lead.campaign or '-'} / {lead.creative or '-'}"),
-        ("Payload", clean_text(lead.start_payload or "-", max_len=80)),
-        (
-            "Telegram",
-            f"@{lead.telegram_username}" if lead.telegram_username else str(lead.telegram_user_id),
-        ),
     ]
+    if lead.country:
+        fields.append(("Country", clean_text(lead.country, max_len=60)))
+    fields.extend(
+        [
+            ("Type", option_label("company_type", lead.company_type, lang)),
+            ("Category", option_label("category", lead.category, lang)),
+            ("Stand", option_label("stand", lead.preferred_stand_size, lang)),
+            ("Readiness", option_label("readiness", lead.readiness, lang)),
+        ]
+    )
+    # legacy answers (the simplified questionnaire stopped asking for them) are shown
+    # only when a value was actually collected
+    if lead.business_relation:
+        fields.append(("Relation", option_label("relation", lead.business_relation, lang)))
+    if lead.website:
+        fields.append(("Website", clean_text(lead.website, max_len=60)))
+    if lead.instagram:
+        fields.append(("Instagram", clean_text(lead.instagram, max_len=60)))
+    fields.extend(
+        [
+            ("Source", f"{lead.source} / {lead.campaign or '-'} / {lead.creative or '-'}"),
+            ("Payload", clean_text(lead.start_payload or "-", max_len=80)),
+            (
+                "Telegram",
+                f"@{lead.telegram_username}"
+                if lead.telegram_username
+                else str(lead.telegram_user_id),
+            ),
+        ]
+    )
     body = "\n".join(f"{label}: <b>{esc(value)}</b>" for label, value in fields)
     breakdown = lead.score_breakdown or {}
     score_line = (

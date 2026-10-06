@@ -1,7 +1,7 @@
 """Visitor funnel (Q1 = "Mehmon sifatida tashrif buyurmoqchiman").
 
 Visitors are *not* exhibitors: no stand, no pricing, no scoring pressure.  They answer
-four questions (name, phone, city, relation to the industry) and are stored with
+four questions - intent, name, optional phone, region - and are stored with
 ``lead_type = visitor``.  Their application never reaches the exhibitor sales group -
 only the optional ``VISITOR_GROUP_ID``.
 

@@ -36,15 +36,13 @@ from app.services.notification import (  # noqa: E402
     card_status_line,
 )
 
+#: The simplified exhibitor funnel: no online-presence / links question any more.
 SAMPLE_EXHIBITOR: dict[str, Any] = {
     "intent": "stand",
     "company_type": "manufacturer",
     "category": "non_alcoholic_drinks",
     "company_name": "Chirchik Juice Plant",
     "region": "tashkent",
-    "online_presence": "both",
-    "website": "chirchikjuice.uz",
-    "instagram": "@chirchik_juice",
     "contact_name": "Dilshod Rahimov",
     "position": "Head of Sales",
     "phone": "+998901234567",
@@ -55,13 +53,12 @@ SAMPLE_EXHIBITOR: dict[str, Any] = {
     "creative": "uz_01",
 }
 
+#: The visitor funnel is four questions: intent, name, optional phone, region.
 SAMPLE_VISITOR: dict[str, Any] = {
     "intent": "visitor",
     "contact_name": "Malika Yusupova",
-    "position": "Category manager, Makro",
     "phone": "+998935554411",
     "region": "samarkand",
-    "business_relation": "retail",
     "source": "qr",
     "campaign": "samarkand_stand3",
 }
@@ -114,11 +111,18 @@ def show_funnel(lead: Lead, lang: str) -> None:
         print(f"      {render_keyboard(render.keyboard or render.reply_keyboard)}")
     number, total = progress_of("intent", answers)
     print(f"\n  progress pill while answering: “{t('progress', lang, step=number, total=total)}”")
-    print(
-        "  (a brand new lead sees 1/10: the link question is only added once they say\n"
-        "   they have a website or Instagram, and the country question once they pick\n"
-        "   “outside Uzbekistan” - so the counter only ever counts real questions)"
-    )
+    if str(lead.intent or "") == "visitor":
+        print(
+            "  (a visitor sees 1/4: intent, name, optional phone and region - the industry\n"
+            "   question is gone, and the country question appears only after “outside\n"
+            "   Uzbekistan”, so the counter never counts a question that will not be asked)"
+        )
+    else:
+        print(
+            "  (a brand new exhibitor sees 1/9: the first question offers two answers only -\n"
+            "   stand or visitor - and the country question appears only after “outside\n"
+            "   Uzbekistan”, so the counter never counts a question that will not be asked)"
+        )
 
 
 def show_score(lead: Lead, values: dict[str, Any], settings: Settings) -> None:
@@ -153,9 +157,9 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--lang", choices=["uz", "ru", "both"], default="both")
-    parser.add_argument(
-        "--intent", choices=["stand", "pricing", "partner", "visitor"], default="stand"
-    )
+    # ``pricing`` / ``partner`` are legacy answers: they exist in the database from
+    # before the simplification, but new users can only choose stand or visitor.
+    parser.add_argument("--intent", choices=["stand", "visitor"], default="stand")
     args = parser.parse_args()
 
     settings = Settings(

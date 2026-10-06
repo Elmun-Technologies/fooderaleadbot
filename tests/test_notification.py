@@ -165,6 +165,34 @@ class TestStatusLine:
         assert t("status.NEGOTIATION", "uz") in build_lead_card(lead, lang="uz", settings=settings)
 
 
+class TestLegacyAnswers:
+    """The simplified questionnaire stopped asking; old answers are still rendered."""
+
+    def test_links_are_shown_when_they_exist(self, settings: Settings) -> None:
+        card = build_lead_card(make_lead(), lang="uz", settings=settings)
+        assert t("card.website", "uz") in card
+        assert t("card.instagram", "uz") in card
+
+    def test_no_link_lines_for_a_simplified_lead(self, settings: Settings) -> None:
+        card = build_lead_card(
+            make_lead(website=None, instagram=None, online_presence=None),
+            lang="uz",
+            settings=settings,
+        )
+        assert t("card.website", "uz") not in card
+        assert t("card.instagram", "uz") not in card
+
+    def test_legacy_intent_is_flagged_on_the_card(self, settings: Settings) -> None:
+        card = build_lead_card(make_lead(intent="pricing"), lang="uz", settings=settings)
+        assert t("card.intent", "uz") in card
+        assert t("opt.intent.pricing", "uz") in card
+
+    def test_stand_intent_is_not_repeated(self, settings: Settings) -> None:
+        assert t("card.intent", "uz") not in build_lead_card(
+            make_lead(intent="stand"), lang="uz", settings=settings
+        )
+
+
 class TestVisitorCard:
     def test_visitor_card_has_no_commercial_fields(self, settings: Settings) -> None:
         lead = make_lead(
@@ -176,9 +204,20 @@ class TestVisitorCard:
         )
         card = build_visitor_card(lead, lang="uz", settings=settings)
         assert t("card.title_visitor", "uz") in card
-        assert "Talaba" in card
+        assert "Talaba" in card  # legacy answer, still visible
         assert "m²" not in card
         assert "/100" not in card
+
+    def test_visitor_card_omits_the_relation_line_when_it_was_never_asked(
+        self, settings: Settings
+    ) -> None:
+        lead = make_lead(
+            lead_type=LeadType.VISITOR.value,
+            classification=Classification.VISITOR.value,
+            business_relation=None,
+        )
+        card = build_visitor_card(lead, lang="uz", settings=settings)
+        assert t("card.relation", "uz") not in card
 
     def test_visitor_card_still_has_contact_details(self, settings: Settings) -> None:
         lead = make_lead(lead_type=LeadType.VISITOR.value, business_relation="retail")

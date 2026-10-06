@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from app.database.models import Classification, FunnelEvent, LeadStatus, LeadType
 from app.database.repository import LeadRepository
-from app.flow import STEPS
+from app.flow import STEPS, steps_for
 from app.options import Category, CompanyType, Intent, OnlinePresence, Readiness, Region, StandSize
 from app.services.lead_service import BeginOutcome, LeadService
 
@@ -212,8 +212,7 @@ class TestVisitorFlow:
         lead = await leads.save_answer(lead, "intent", {"intent": Intent.VISITOR})
         lead = await leads.save_answer(lead, "visitor_name", {"contact_name": "Malika"})
         lead = await leads.save_answer(lead, "visitor_phone", {"phone": "+998901112233"})
-        lead = await leads.save_answer(lead, "region", {"region": Region.TASHKENT})
-        lead = await leads.save_answer(lead, "visitor_relation", {"business_relation": "student"})
+        lead = await leads.save_answer(lead, "visitor_region", {"region": Region.TASHKENT})
         result = await leads.finalize(lead)
 
         assert result.classification == Classification.VISITOR.value
@@ -226,7 +225,8 @@ class TestVisitorFlow:
         assert stored.lead_type == LeadType.VISITOR.value
         assert stored.contact_name == "Malika"
         assert stored.phone == "+998901112233"
-        assert stored.business_relation == "student"
+        assert stored.region == Region.TASHKENT.value
+        assert stored.business_relation is None  # the industry question is gone
 
     async def test_visitor_is_sent_to_the_visitor_group_when_configured(
         self, repo, settings, user, notifier_with_visitor_group
@@ -282,6 +282,54 @@ class TestAntiSpam:
         assert again.outcome is BeginOutcome.RESUMABLE_DRAFT
         assert again.lead.id == lead.id
         assert await leads.resume_step(again.lead) == "company_type"
+
+    async def test_legacy_draft_on_a_removed_step_resumes_on_the_new_funnel(
+        self, leads, user, repo
+    ) -> None:
+        """An old draft may point at ``online``/``url``/``visitor_relation``."""
+        lead = (await leads.start_application(user)).lead
+        await leads.save_answer(lead, "intent", {"intent": Intent.STAND})
+        await repo.update_lead(lead.id, current_step="online")
+        stored = await repo.get_lead(lead.id)
+        assert stored is not None
+        assert await leads.resume_step(stored) == "company_type"
+
+    async def test_legacy_visitor_draft_with_all_answers_lands_on_the_last_question(
+        self, leads, user, repo
+    ) -> None:
+        lead = (await leads.start_application(user)).lead
+        for step_key, values in (
+            ("intent", {"intent": Intent.VISITOR}),
+            ("visitor_name", {"contact_name": "Malika"}),
+            ("visitor_phone", {"phone": "+998901112233"}),
+            ("region", {"region": Region.TASHKENT}),
+            ("visitor_relation", {"business_relation": "student"}),
+        ):
+            lead = await leads.save_answer(lead, step_key, values)
+        await repo.update_lead(lead.id, current_step="visitor_relation", is_draft=True)
+        stored = await repo.get_lead(lead.id)
+        assert stored is not None
+        # the last question of the shortened visitor funnel, so it can be finished
+        assert await leads.resume_step(stored) == "visitor_region"
+
+    async def test_legacy_answers_are_kept_but_never_asked_again(self, leads, user, repo) -> None:
+        """Old rows keep their website/Instagram/relation - the new flow does not touch them."""
+        lead = (await leads.start_application(user)).lead
+        await repo.update_lead(
+            lead.id,
+            website="legacy.uz",
+            instagram="@legacy",
+            business_relation="retail",
+            online_presence="both",
+        )
+        stored = await repo.get_lead(lead.id)
+        assert stored is not None
+        assert stored.website == "legacy.uz"
+        assert stored.instagram == "@legacy"
+        assert stored.business_relation == "retail"
+        # the simplified paths do not contain those questions
+        assert "online" not in steps_for(stored.field_values())
+        assert "url" not in steps_for(stored.field_values())
 
     async def test_abandoned_draft_is_not_resumable(self, leads, user, repo) -> None:
         lead = (await leads.start_application(user)).lead

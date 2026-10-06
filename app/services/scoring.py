@@ -5,6 +5,11 @@ weights live in plain module-level dicts so a campaign manager can tune them in
 minutes without touching the flow code.
 
 Score is capped at :data:`MAX_SCORE` (100).
+
+The simplified questionnaire no longer asks for a website / Instagram (or an online
+presence at all): those legacy answers neither add nor remove points here.  Existing
+rows keep the score that was stored when they were collected; a re-score simply does
+not reward links any more.
 """
 
 from __future__ import annotations
@@ -63,10 +68,6 @@ COMPANY_TYPE_SCORES: dict[str, int] = {
 CATEGORY_SCORE = 10
 CATEGORY_OTHER_SCORE = 2
 
-ONLINE_SCORE_NONE = 0
-ONLINE_SCORE_ONE_CHANNEL = 8
-ONLINE_SCORE_BOTH_CHANNELS = 10
-
 CONTACT_NAME_SCORE = 5
 PHONE_SCORE = 10
 
@@ -99,8 +100,6 @@ class LeadAnswers:
     company_name: str | None = None
     region: str | None = None
     country: str | None = None
-    website: str | None = None
-    instagram: str | None = None
     contact_name: str | None = None
     position: str | None = None
     phone: str | None = None
@@ -146,13 +145,6 @@ def score_lead(answers: LeadAnswers) -> ScoreResult:
         add("category", CATEGORY_SCORE)
     elif category:  # "other" / anything that is not a FOODERA direction
         add("category", CATEGORY_OTHER_SCORE)
-
-    has_website = _has(answers.website)
-    has_instagram = _has(answers.instagram)
-    if has_website and has_instagram:
-        add("verification", ONLINE_SCORE_BOTH_CHANNELS)
-    elif has_website or has_instagram:
-        add("verification", ONLINE_SCORE_ONE_CHANNEL)
 
     if _has(answers.contact_name) and _has(answers.position):
         add("contact_quality", CONTACT_NAME_SCORE)

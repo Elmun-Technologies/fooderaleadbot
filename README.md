@@ -9,7 +9,7 @@ Runs on **Python 3.11+ · aiogram 3.x · SQLAlchemy 2 (async) · PostgreSQL or S
 ```
 visitor / exhibitor                private sales group                database
 ─────────────────                  ───────────────────                ────────
-10 questions  ──►  score+classify ─►  🔥 lead card ──► 👤 manager ───►  leads
+ 9 questions  ──►  score+classify ─►  🔥 lead card ──► 👤 manager ───►  leads
    (one per screen)                    (status buttons)                lead_events
    ◄── thanks, no score shown          ◄── card edited in place        bot_users
 ```
@@ -36,16 +36,19 @@ visitor / exhibitor                private sales group                database
 
 ## What it does
 
-- **Qualifies exhibitors** with 10 short questions (buttons wherever possible, free text only
-  where a button would be silly), one question per screen, resumable at any point.
+- **Qualifies exhibitors** with 9 short questions (buttons wherever possible, free text only
+  where a button would be silly), one question per screen, resumable at any point. The first
+  question offers exactly two answers — *participate with a stand* (`stand`) or *come as a
+  visitor* (`visitor`).
 - **Separates visitors from leads.** Someone who taps “I want to visit” walks a 4-question
-  funnel and never enters the exhibitor funnel, never gets a score pushed to the sales group,
-  and (optionally) lands in a separate `VISITOR_GROUP_ID` chat.
+  funnel (intent → name → optional phone → region) and never enters the exhibitor funnel,
+  never gets a score pushed to the sales group, and (optionally) lands in a separate
+  `VISITOR_GROUP_ID` chat.
 - **Attributes every lead**: `t.me/foodera_bot?start=tgads_foodera_uz_01` deep links from
   Telegram Ads, QR posters or a landing page are parsed into `source / campaign / creative`
   and stored on both the user and the lead.
 - **Scores deterministically** (0–100) and classifies into `HOT / WARM / COLD / LOW`.
-- **Posts a card into the sales group** with the answers, contacts, links, source, a lead code
+- **Posts a card into the sales group** with the answers, contacts, source, a lead code
   (`FD000042`) and four status buttons; the card is edited in place as the status changes.
 - **Keeps the funnel honest**: `lead_events` records every step, so `/stats` shows real
   conversion numbers (starts → language → intent → … → done), source performance, and stale drafts.
@@ -59,8 +62,10 @@ visitor / exhibitor                private sales group                database
   output (there is a test for every weight).
 - **Never shows a score, a classification or the word “qualified” to the person filling the
   form.** Users get one question per screen and a thank-you message; scoring is internal.
-- **Never rejects a lead for missing a website.** The links question is optional, and online
-  presence is worth at most 10 of 100 points — it can never decide the outcome on its own.
+- **Never asks for a website, an Instagram account or any other online presence.** The links
+  question was removed from the funnel (website / Instagram / relation columns are kept only so
+  leads collected earlier stay complete) and those legacy answers no longer add points, so
+  nobody is filtered out for not having a website.
 - **Never blocks an international number** — `+44…`, `+1…` are stored as-is; only `+998` numbers
   are normalised into the local display format.
 - **Never logs the bot token** (see [`app/utils/logging.py`](app/utils/logging.py)) and escapes
@@ -72,15 +77,18 @@ visitor / exhibitor                private sales group                database
 
 | Funnel | Questions | Notes |
 |---|---|---|
-| Exhibitor (`stand`, `pricing`) | 10 | intent → company type → category → company name → region → online presence → links → contact person → phone → stand size → readiness |
-| Partner | 9 | exhibitor funnel without the stand-size question |
-| Visitor | 4 | name → phone → region → “why are you coming” |
+| Exhibitor (`stand`) | 9 | intent → company type → category → company name → region → contact person → phone *(optional)* → stand size → readiness |
+| Visitor | 4 | intent → name → phone *(optional)* → region |
+| Legacy `pricing` / `partner` | 9 / 8 | answers from before the simplification: old drafts and old card buttons keep working, the first question no longer offers them. `partner` skips the stand-size question |
 
-Two questions are unlocked by the answers, so the progress pill only counts questions that will
-actually be asked (`Savol 3/10`):
+One question is unlocked by an answer, so the progress pill only counts questions that will
+actually be asked (`Savol 3/9`):
 
-- **“outside Uzbekistan”** → a follow-up *country* question (+1 total).
-- **“I have a website / Instagram / both”** → a follow-up *send your links* question (+1 total).
+- **“outside Uzbekistan”** → a follow-up *country* question (+1 total) — for exhibitors and
+  visitors alike.
+
+The removed questions (`online`, `url`, `visitor_relation`) are gone from the new funnel; the
+answers collected earlier stay in the database and are still shown on the card and in `/lead`.
 
 Buttons that are optional carry a `⏭ Skip` button; every screen after the first has `⬅️ Back`,
 which re-asks the previous question with the previous answer pre-selected (`✓`).
@@ -90,7 +98,7 @@ Preview all of it offline — copy, keyboards, scoring and cards — without a t
 ```bash
 python scripts/demo_run.py                 # exhibitor, uz + ru
 python scripts/demo_run.py --lang ru
-python scripts/demo_run.py --intent visitor
+python scripts/demo_run.py --intent visitor  # the four-question visitor funnel
 ```
 
 ---
@@ -215,12 +223,6 @@ Alkogolsiz ichimliklar
 🎯 Holati:
 Stend bron qilishga tayyormiz
 
-🌐 Instagram:
-<a href="https://instagram.com/chirchik_juice">@chirchik_juice</a>
-
-🌐 Sayt:
-<a href="https://chirchikjuice.uz">chirchikjuice.uz</a>
-
 📢 Manba:
 Telegram Ads
 
@@ -256,8 +258,10 @@ Cards are built at `MAX_MESSAGE_LENGTH = 3800` characters (Telegram's hard limit
 company names and free-text answers are truncated rather than dropped, so a card is never lost
 because someone pasted a paragraph.
 
-Visitor cards (when `VISITOR_GROUP_ID` is set) are compact: name, phone, region, why they are
-coming, source and lead id — no score, no stand data, and never posted to the exhibitor group.
+Visitor cards (when `VISITOR_GROUP_ID` is set) are compact: name, phone, region, source and
+lead id — no score, no stand data, and never posted to the exhibitor group. Legacy fields
+(`website`, `instagram`, `business_relation`, a `pricing` / `partner` intent) are rendered only
+for the leads that actually have them, so a card built from the simplified funnel stays short.
 
 ---
 
@@ -268,14 +272,16 @@ breakdown so a decision can always be audited:
 
 | Signal | Points |
 |---|---|
-| Intent: `stand` 30 · `pricing` 25 · `partner` 10 · `visitor` 0 | up to 30 |
+| Intent: `stand` 30 · legacy `pricing` 25 · legacy `partner` 10 · `visitor` 0 | up to 30 |
 | Company type: manufacturer 20 · ingredient / equipment 18 · distributor / importer 15 · logistics 12 · retail 8 · HoReCa 5 · other 3 | up to 20 |
 | Product category: any real FOODERA direction 10 · “other” 2 | 10 / 2 |
-| Online presence verified from the actual links: site + Instagram 10 · one channel 8 · none or skipped 0 | up to 10 |
 | Phone number provided | 10 |
 | Stand size: 36 m²+ 10 · 27 m² 8 · 18 m² 6 · 9 m² 4 · undecided 2 | up to 10 |
 | Readiness: ready to book 20 · review options 15 · want a call 10 · just interested 2 | up to 20 |
 | Named contact person (name, not just `@handle`) | 5 |
+
+The questionnaire no longer contributes a links block: website / Instagram answers that exist
+on old rows are ignored by the scorer (they neither add nor remove points).
 
 Classification: `HOT ≥ 75`, `WARM ≥ 55`, `COLD ≥ 35`, else `LOW` — and **always** `VISITOR` for
 the visitor funnel, whatever the arithmetic says.
@@ -351,7 +357,9 @@ Three tables (see [`app/database/models.py`](app/database/models.py), migration
 - **`leads`** — the answers as typed columns (queryable, no JSON blob), `is_draft` +
   `current_step` for resume, `score` + `score_breakdown` + `classification` + `is_high_intent`,
   `lead_status` + `manager_user_id` + `status_changed_at`, `notify_chat_id` + `notify_message_id`
-  (which card message to edit), and a unique `lead_code`.
+  (which card message to edit), and a unique `lead_code`. `online_presence`, `website`,
+  `instagram` and `business_relation` are **legacy** columns: the simplified questionnaire never
+  writes them, but they are never dropped either, so nothing collected earlier is lost.
 - **`lead_events`** — append-only funnel log (`STARTED`, `LANGUAGE_SELECTED`, `INTENT_SELECTED`
   … `COMPLETED`, `NOTIFICATION_SENT` / `NOTIFICATION_FAILED`, `STATUS_CHANGED`,
   `ALREADY_APPLIED`, `ABANDONED`, …) used for the funnel report.
@@ -409,7 +417,8 @@ fly secrets set BOT_TOKEN="123456:ABC..." \
                 SUPPORT_USERNAME="foodera_support" \
                 QUALIFY_MIN_CLASSIFICATION="warm"
 
-# 3. ship it
+# 3. make sure this checkout really has the simplified questionnaire, then ship it
+python scripts/check_questionnaire.py     # exits 1 and refuses if the funnel is the old one
 fly deploy && fly logs
 ```
 
@@ -471,12 +480,27 @@ job, which is fewer ways to lose leads during the campaign.
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 
-python -m pytest tests -q      # 364 tests, SQLite in-process, no network
+python -m pytest tests -q      # 398 tests, SQLite in-process, no network
 python -m pytest tests/test_journey.py -q   # the end-to-end conversation
-ruff check . && ruff format --check .   # both clean; CI can run exactly these
+ruff check app/flow.py app/options.py app/keyboards app/handlers/engine.py \
+           app/handlers/start.py app/handlers/language.py app/handlers/visitor.py \
+           app/handlers/qualification.py app/handlers/fallback.py app/middlewares \
+           app/services app/i18n scripts tests   # clean: the modules of the bot itself
+ruff format --check app/flow.py app/options.py app/keyboards app/handlers/engine.py \
+                    app/services app/i18n scripts tests
 python scripts/demo_run.py --lang ru        # look at the copy without Telegram
+python scripts/check_questionnaire.py       # pre-deploy gate: is this tree the new funnel?
 alembic upgrade head && alembic downgrade base   # the migration is reversible
 ```
+
+> **Known lint backlog (pre-existing, not part of the questionnaire work).** `ruff check .`
+> reports 106 findings — all of them in the admin panel / marketing modules that were added
+> later (`app/web/**`, `app/handlers/group_chat.py`, `app/services/followup_service.py`,
+> `app/services/chat_service.py`, `app/services/broadcast_service.py`, `app/main.py`, plus six
+> cosmetic ones in `app/handlers/admin.py`): mostly `B008` (`Depends(...)` / `File(...)` in
+> FastAPI defaults), unsorted imports and unused imports. `ruff format --check .` reports 18
+> such files. Nothing in the bot's own questionnaire path is affected, and the counts are
+> identical to `main` — clean them up in a separate, front-end-only change.
 
 Layout (each layer depends only on the one below it):
 
@@ -492,20 +516,21 @@ app/
   middlewares/         DatabaseMiddleware (session/repo/services), Throttling, UserContext
   database/            models, session factory, LeadRepository (all SQL lives here)
   services/            lead_service (use cases), scoring, statuses, notification (cards),
-                       parsing (contact line, links), phone, source_tracking
+                       parsing (contact line), phone, source_tracking
   handlers/            engine.py (ask/advance/back/skip/finish) + start, language,
                        qualification, visitor, admin, fallback
   bot.py / main.py     assembly and entry point
 Dockerfile / fly.toml  container + Fly.io worker (no public port)
 alembic/               one reversible migration
-scripts/demo_run.py    offline preview of copy, scoring and cards
+scripts/               demo_run.py (offline preview) + check_questionnaire.py (deploy gate)
 tests/                 unit tests + test_journey.py (real updates through the real routers)
 ```
 
 `tests/test_journey.py` is the interesting one: it builds the real `Dispatcher`, feeds raw
 Telegram `Update` objects into it and asserts on the messages the bot tried to send — the
-language gate, ten answers, anti-spam, the card in the group, a manager booking a lead, an
-outsider being refused, back/skip/retry, a photo sent mid-form, and the `/stats` numbers.
+language gate, nine answers, the two-button first question, anti-spam, the card in the group, a
+manager booking a lead, an outsider being refused, back/skip/retry, a photo sent mid-form, the
+legacy `/lead` rendering, and the `/stats` numbers.
 Only the HTTP layer is faked.
 
 Adding a question means editing data, not code: add the option to `app/options.py`, the step to
@@ -526,7 +551,7 @@ Adding a question means editing data, not code: add the option to `app/options.p
 | Cards land in the general chat instead of a topic | Set `SALES_GROUP_TOPIC_ID`, and enable Topics in the group. |
 | `database schema is not ready` | Run `alembic upgrade head`, or set `AUTO_CREATE_TABLES=true` locally. |
 | `/stats` says “not for you” | Your numeric id is not in `ADMIN_USER_IDS` (usernames are rejected on purpose). |
-| A user is stuck on an old question | `nav:back` re-asks with the stored answer; `/restart` starts a new draft (the old one stays in the DB); after a bot restart the draft is loaded from `current_step`. |
+| A user is stuck on an old question | `nav:back` re-asks with the stored answer; `/restart` starts a new draft (the old one stays in the DB); after a bot restart the draft is loaded from `current_step` — and a draft that still points at a removed question (`online`, `url`, `visitor_relation`) is moved to the first unanswered question of the simplified funnel. |
 | Manager taps a button, sees an alert | Either the transition is not allowed (see the pipeline above) or `ALLOW_GROUP_MANAGERS=false` and their id is not an admin. |
 | “Please slow down” to a user | `RATE_LIMIT_PER_MINUTE` reached (default 30/min) — raise it only if you have a good reason. |
 
@@ -541,7 +566,8 @@ Adding a question means editing data, not code: add the option to `app/options.p
 - Status buttons are checked against the callback's chat and user id, not just the presence of a
   button; `/setstatus` is admin-only; the funnel refuses foreign ids with `err.lead_not_found`.
 - The bot stores exactly what a person volunteers in the conversation (name, company, contact,
-  links) — no scraping, no third-party enrichment, no analytics scripts. Deleting a lead's row
-  deletes the record; `lead_events` rows for a lead cascade with it.
+  phone, region; plus website / Instagram / industry relation for the leads that answered before
+  the questionnaire was simplified) — no scraping, no third-party enrichment, no analytics
+  scripts. Deleting a lead's row deletes the record; `lead_events` rows for a lead cascade with it.
 - Rate limiting and “one active application per user” keep the group free of duplicate cards
   when the same person taps the same ad twice.

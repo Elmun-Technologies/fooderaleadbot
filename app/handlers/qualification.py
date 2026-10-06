@@ -4,7 +4,7 @@ The questionnaire itself is driven by :mod:`app.handlers.engine` (one generic ha
 per *kind* of answer, not per question), so this module is only the router wiring:
 
 * ``q:<step>:<value>``  - inline choices (intent, company type, category, region,
-  online presence, stand size, readiness, visitor answers);
+  stand size, readiness, visitor answers);
 * ``cat:page:<n>``      - pagination of the 16 FOODERA directions;
 * ``nav:back|skip``     - navigation;
 * free text and ``📱 share contact`` answers.

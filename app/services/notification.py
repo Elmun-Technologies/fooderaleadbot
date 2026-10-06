@@ -24,7 +24,7 @@ from app.config import Settings
 from app.database.models import Classification, Lead, LeadStatus
 from app.i18n import option_label, t
 from app.keyboards.inline import lead_actions_kb
-from app.options import Region
+from app.options import LEGACY_INTENTS, Region
 from app.services.source_tracking import SOURCE_LABELS
 from app.services.statuses import (
     ACTION_STATUS,
@@ -220,6 +220,10 @@ def build_lead_card(
         _labelled("card.company_type", option_label("company_type", lead.company_type, lang), lang),
         _labelled("card.category", option_label("category", lead.category, lang), lang),
     ]
+    # legacy answers: ``pricing`` / ``partner`` intents and the fields the simplified
+    # questionnaire stopped asking (relation, links) are still shown when they exist
+    if str(lead.intent or "") in LEGACY_INTENTS:
+        details.append(_labelled("card.intent", option_label("intent", lead.intent, lang), lang))
     if lead.business_relation:
         details.append(
             _labelled("card.relation", option_label("relation", lead.business_relation, lang), lang)
@@ -295,8 +299,18 @@ def build_visitor_card(lead: Lead, *, lang: str, settings: Settings | None = Non
                 lang,
             ),
             _labelled("card.region", _location(lead, lang), lang),
-            _labelled(
-                "card.relation", option_label("relation", lead.business_relation, lang), lang
+            # ``relation`` is a legacy answer: shown only for leads collected before the
+            # visitor flow was shortened
+            *(
+                [
+                    _labelled(
+                        "card.relation",
+                        option_label("relation", lead.business_relation, lang),
+                        lang,
+                    )
+                ]
+                if lead.business_relation
+                else []
             ),
         ]
     )
