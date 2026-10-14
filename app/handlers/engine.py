@@ -43,6 +43,7 @@ from app.i18n import t
 from app.keyboards.inline import category_kb, choice_value, question_kb, single_choice_kb
 from app.keyboards.reply import phone_nav_action, phone_reply_kb, remove_reply_kb
 from app.options import Region
+from app.services.badge_service import maybe_send_badge
 from app.services.lead_service import FinalizeResult, LeadService
 from app.services.parsing import parse_contact_line
 from app.utils.phone import normalize_phone
@@ -372,6 +373,16 @@ async def finish(ctx: Context) -> FinalizeResult:
             )
         except TelegramBadRequest:  # pragma: no cover - user left the chat
             logger.warning("could not deliver the completion message for %s", ctx.lead.lead_code)
+
+    # Guests get their badge (PNG + QR) right after the thank-you message.  Rendering and
+    # delivery are best-effort by design: a guest whose badge fails is still registered,
+    # so nothing here may raise or roll anything back - maybe_send_badge() logs and returns.
+    await maybe_send_badge(
+        ctx.event.bot,
+        result.lead,
+        lang=ctx.lang,
+        enabled=ctx.settings.visitor_badge_enabled,
+    )
     return result
 
 

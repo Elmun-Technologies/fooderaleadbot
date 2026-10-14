@@ -24,6 +24,7 @@ visitor / exhibitor                private sales group                database
 - [Configuration](#configuration)
 - [Finding `SALES_GROUP_ID`](#finding-sales_group_id)
 - [The lead card](#the-lead-card)
+- [Guest badge `MEHMON BEYDJIGI`](#guest-badge-mehmon-beydjigi)
 - [Qualification model](#qualification-model)
 - [Pipeline statuses](#pipeline-statuses)
 - [Commands and callbacks](#commands-and-callbacks)
@@ -50,6 +51,10 @@ visitor / exhibitor                private sales group                database
 - **Scores deterministically** (0–100) and classifies into `HOT / WARM / COLD / LOW`.
 - **Posts a card into the sales group** with the answers, contacts, source, a lead code
   (`FD000042`) and four status buttons; the card is edited in place as the status changes.
+- **Hands every guest a badge.** A finished visitor registration is answered with an
+  auto-generated `MEHMON` badge (PNG, 900×1200, QR code of the lead code) that is printed and
+  shown at the entrance; `/beydjik` re-sends it on demand and the admin panel downloads the same
+  PNG for the printer. Exhibitors are never sent one.
 - **Keeps the funnel honest**: `lead_events` records every step, so `/stats` shows real
   conversion numbers (starts → language → intent → … → done), source performance, and stale drafts.
 - **Survives restarts**: drafts are re-opened from the database (`DRAFT_TTL_HOURS`), stale button
@@ -159,6 +164,7 @@ setting below is documented in [`.env.example`](.env.example).
 | `SUPPORT_USERNAME` | – | Shown as the “questions?” contact in user messages. |
 | `DISPLAY_TIMEZONE` | `Asia/Tashkent` | Only affects the timestamp printed on the card; invalid values fall back to UTC. |
 | `LEAD_CODE_PREFIX` | `FD` | Lead codes look like `FD000042`. |
+| `VISITOR_BADGE_ENABLED` | `true` | Send the auto-generated guest badge at the end of the visitor funnel and enable `/beydjik`. |
 | `HOT_MIN_SCORE` / `WARM_MIN_SCORE` / `COLD_MIN_SCORE` | `75 / 55 / 35` | Classification thresholds (0–100). |
 | `QUALIFY_MIN_CLASSIFICATION` | `warm` | Lowest class that is pushed to `SALES_GROUP_ID` (`hot` \| `warm` \| `cold`). |
 | `REQUIRE_PHONE_FOR_SALES` | `true` | No phone → no push (the record is still saved). |
@@ -265,6 +271,48 @@ for the leads that actually have them, so a card built from the simplified funne
 
 ---
 
+## Guest badge (`MEHMON BEYDJIGI`)
+
+A visitor who finishes the four-question funnel gets a picture they can show (or print) at the
+entrance. It is drawn from scratch with Pillow — no template file, no assets, no database
+columns — from the lead row itself, so it is always up to date and can be re-generated at any
+time ([`app/services/badge_service.py`](app/services/badge_service.py)):
+
+```text
+┌──────────────────────────────────────────┐
+│           FOODERA EXPO 2026              │  900×1200 px, #111827 header
+│  27–29 oktabr 2026 · SOF EXPO, Samarqand │
+│  ┌────────────────────────────────────┐  │
+│  │              MEHMON                │  │  blue ribbon (ГОСТЬ in Russian)
+│  └────────────────────────────────────┘  │
+│             Malika Rahimova              │  name: one line, two lines or a smaller font
+│                Samarqand                 │  region, localized
+│              [ QR CODE ]                 │  encodes the lead code (FD000123)
+│               FD000123                   │
+│   Kirishda ushbu beydjikni ko‘rsating    │
+└──────────────────────────────────────────┘
+```
+
+* **Automatic**: `generate_badge(lead, lang)` is a pure function returning PNG bytes; the funnel
+  sends it as a photo (`BufferedInputFile`, in memory — nothing is written to disk) right after
+  the thank-you message, in the language the guest used.
+* **Never in the way of a registration**: rendering *and* delivering are wrapped in
+  `try/except` and only log — a guest whose badge fails is still registered, and the flow ends
+  normally.
+* **Visitors only**: exhibitors and partners never receive a badge (one shared check,
+  `is_visitor_lead`, used by the funnel, `/beydjik` and the panel).
+* **`/beydjik`** (private chat) re-sends the last finished visitor application as a badge; without
+  one it explains how to register and offers `/start`. The command appears in the Telegram menu
+  while the feature is on.
+* **Admin panel**: the lead page of a visitor shows **🎫 Beydjik yuklab olish**, which downloads
+  `GET /admin/leads/{id}/badge` as `FD000123_badge.png` (`Content-Disposition: attachment`) — for
+  the printer at the venue. Exhibitor leads do not show the button (and get a 404).
+* **`VISITOR_BADGE_ENABLED=false`** switches the whole feature off.
+* Fonts: `fonts-dejavu-core` is installed in the [`Dockerfile`](Dockerfile); without it the badge
+  still renders through PIL's built-in font instead of crashing.
+
+---
+
 ## Qualification model
 
 `score_lead()` (0–100, capped at `MAX_SCORE`), stored together with the per-component
@@ -327,7 +375,7 @@ NEW ──► CONTACTED ──► NEGOTIATION ──► BOOKED ──► CLOSED
 
 ## Commands and callbacks
 
-**User** (private chat): `/start [payload]` · `/help` · `/restart`
+**User** (private chat): `/start [payload]` · `/help` · `/restart` · `/beydjik` (re-send the guest badge)
 **Admin** (any chat, restricted to `ADMIN_USER_IDS`): `/stats` · `/leads [n]` · `/hot [n]` ·
 `/warm [n]` · `/today` · `/source` · `/link [name]` · `/lead <id|FD000042>` ·
 `/setstatus <id|FD000042> <STATUS>` · `/chatid`
@@ -496,21 +544,22 @@ job, which is fewer ways to lose leads during the campaign.
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 
-python -m pytest tests -q      # 398 tests, SQLite in-process, no network
+python -m pytest tests -q      # 476 tests, SQLite in-process, no network
 python -m pytest tests/test_journey.py -q   # the end-to-end conversation
+python -m pytest tests/test_badge.py -q     # the guest badge: drawing, QR, funnel wiring
 ruff check app/flow.py app/options.py app/keyboards app/handlers/engine.py \
            app/handlers/start.py app/handlers/language.py app/handlers/visitor.py \
-           app/handlers/qualification.py app/handlers/fallback.py app/middlewares \
-           app/services app/i18n scripts tests   # clean: the modules of the bot itself
+           app/handlers/qualification.py app/handlers/badge.py app/handlers/fallback.py \
+           app/middlewares app/services app/i18n scripts tests
 ruff format --check app/flow.py app/options.py app/keyboards app/handlers/engine.py \
-                    app/services app/i18n scripts tests
+                    app/handlers/badge.py app/services app/i18n scripts tests
 python scripts/demo_run.py --lang ru        # look at the copy without Telegram
 python scripts/check_questionnaire.py       # pre-deploy gate: is this tree the new funnel?
 alembic upgrade head && alembic downgrade base   # the migration is reversible
 ```
 
 > **Known lint backlog (pre-existing, not part of the questionnaire work).** `ruff check .`
-> reports 106 findings — all of them in the admin panel / marketing modules that were added
+> reports 110 findings — all of them in the admin panel / marketing modules that were added
 > later (`app/web/**`, `app/handlers/group_chat.py`, `app/services/followup_service.py`,
 > `app/services/chat_service.py`, `app/services/broadcast_service.py`, `app/main.py`, plus six
 > cosmetic ones in `app/handlers/admin.py`): mostly `B008` (`Depends(...)` / `File(...)` in
@@ -532,9 +581,10 @@ app/
   middlewares/         DatabaseMiddleware (session/repo/services), Throttling, UserContext
   database/            models, session factory, LeadRepository (all SQL lives here)
   services/            lead_service (use cases), scoring, statuses, notification (cards),
-                       parsing (contact line), phone, source_tracking
-  handlers/            engine.py (ask/advance/back/skip/finish) + start, language,
-                       qualification, visitor, admin, fallback
+                       badge_service (guest badge PNG + QR), parsing (contact line), phone,
+                       source_tracking
+  handlers/            engine.py (ask/advance/back/skip/finish) + start, language, badge
+                       (/beydjik), qualification, visitor, admin, fallback
   bot.py / main.py     assembly and entry point
 Dockerfile / fly.toml  container + Fly.io worker (no public port)
 alembic/               one reversible migration
@@ -546,7 +596,8 @@ tests/                 unit tests + test_journey.py (real updates through the re
 Telegram `Update` objects into it and asserts on the messages the bot tried to send — the
 language gate, nine answers, the two-button first question, anti-spam, the card in the group, a
 manager booking a lead, an outsider being refused, back/skip/retry, a photo sent mid-form, the
-legacy `/lead` rendering, and the `/stats` numbers.
+legacy `/lead` rendering, the `/stats` numbers, and a guest receiving the badge photo (plus
+`/beydjik` re-sending it).
 Only the HTTP layer is faked.
 
 Adding a question means editing data, not code: add the option to `app/options.py`, the step to
@@ -563,6 +614,8 @@ Adding a question means editing data, not code: add the option to `app/options.p
 | Leads saved, but nothing in the group | Run `python scripts/check_group_delivery.py --send` (on Fly: `fly ssh console -C "python scripts/check_group_delivery.py --send"`): it checks the configuration, the token, the group membership and the topic, and prints the exact fix. Usual causes: `SALES_GROUP_ID` unset (`lead notification skipped: group is not configured` in the log), a wrong id, or the bot not being a member. |
 | Admin gets `⚠️ Lead card could not be posted…` | Delivery is failing and the alert already names the cause: a `-100…` id typo, a group that was upgraded (send `/chatid` for the new id), a removed topic, or missing posting rights. Fix and the next lead card goes through. |
 | *Some* leads reach the group, others do not | That is the qualification gate, not a bug: only `QUALIFY_MIN_CLASSIFICATION` and above (plus phone/company when `REQUIRE_*_FOR_SALES=true`) are pushed. Everyone is stored in the DB either way. |
+| No badge after a guest registers | `VISITOR_BADGE_ENABLED=false`, or the log has `could not render the visitor badge` / `could not deliver the visitor badge` (the registration itself is complete either way). In a slim image install `fonts-dejavu-core`; the admin panel's **🎫 Beydjik yuklab olish** button always works and shows the same PNG. |
+| `/beydjik` answers “first register” | The command only serves the *last finished visitor* application of that user — exhibitors and partners never get a badge. |
 | `bot must be an member of the supergroup chat` | Add the bot to the group (it needs *Post messages*). |
 | Cards land in the general chat instead of a topic | Set `SALES_GROUP_TOPIC_ID`, and enable Topics in the group. |
 | `database schema is not ready` | Run `alembic upgrade head`, or set `AUTO_CREATE_TABLES=true` locally. |

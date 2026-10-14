@@ -4,23 +4,28 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request, Query, Form
-from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import Settings, get_settings
+from app.database.models import Lead, LeadStatus
+from app.services.badge_service import badge_filename, generate_badge, is_visitor_lead
 from app.web.auth import get_lang, require_auth
+from app.web.deps import get_bot, get_repo
 from app.web.i18n import t as translate
-from app.web.deps import get_repo, get_bot
-from app.database.models import LeadStatus
 
 BASE_DIR = Path(__file__).parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.globals["t"] = translate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -106,6 +111,38 @@ async def lead_detail(
             "chat_history": chat_history,
             "statuses": [s.value for s in LeadStatus],
         },
+    )
+
+
+@router.get("/leads/{lead_id}/badge")
+async def download_badge(
+    lead_id: int,
+    user: Annotated[str, Depends(require_auth)],
+    lang: Annotated[str, Depends(get_lang)],
+    repo: Annotated[Any, Depends(get_repo)],
+):
+    """Print-ready PNG of the guest badge (visitor leads only, redrawn on every request).
+
+    ``Annotated`` dependencies rather than ``Depends()`` defaults: the route is new, so it
+    does not have to repeat the ``B008`` pattern the rest of this (pre-existing) module
+    carries.
+    """
+    lead: Lead | None = await repo.get_lead(lead_id)
+    if not lead:
+        return HTMLResponse(content="Lead not found", status_code=404)
+    if not is_visitor_lead(lead):
+        return HTMLResponse(content=translate("badge_visitors_only", lang), status_code=404)
+
+    try:
+        image = generate_badge(lead, lead.language or lang)
+    except Exception:  # the panel must not 500 - report it as a badge we cannot draw
+        logger.exception("badge rendering failed for lead %s", lead.lead_code)
+        return HTMLResponse(content=translate("badge_failed", lang), status_code=500)
+
+    return Response(
+        content=image,
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{badge_filename(lead)}"'},
     )
 
 

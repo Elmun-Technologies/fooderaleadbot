@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     admin_user_ids: Annotated[list[int], NoDecode] = Field(default_factory=list)
     allow_group_managers: bool = True
 
+    # ------------------------------------------------------------ Visitor badge
+    #: A finished guest (visitor) registration gets an auto-generated MEHMON badge
+    #: (PNG with a QR code) plus the /beydjik command to fetch it again.
+    visitor_badge_enabled: bool = True
+
     # ---------------------------------------------------------------- Behaviour
     default_language: Literal["uz", "ru"] = "uz"
     log_level: str = "INFO"

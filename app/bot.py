@@ -94,6 +94,10 @@ def command_list(language_code: str, settings: Settings) -> list[BotCommand]:
             command="help", description=t("btn.support", language_code).replace("❓ ", "")[:256]
         ),
     ]
+    if settings.visitor_badge_enabled:
+        commands.append(
+            BotCommand(command="beydjik", description=t("badge.command", language_code)[:256])
+        )
     # Admin commands - visible for all if sales group configured (group members can use)
     if settings.admin_user_ids or settings.sales_group_id:
         commands += [

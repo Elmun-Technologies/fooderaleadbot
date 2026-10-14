@@ -15,8 +15,13 @@ ENV PYTHONUNBUFFERED=1 \
 # tzdata is not optional here: DISPLAY_TIMEZONE (Asia/Tashkent on the cards, the
 # operational day in /stats) is resolved through zoneinfo, and without the database the
 # settings layer quietly falls back to UTC.
+#
+# fonts-dejavu-core is not optional either: python:3.11-slim ships without a single TTF,
+# and the guest badge (app/services/badge_service.py) is drawn with DejaVuSans/-Bold.
+# Without it the badge still renders through PIL's built-in bitmap font, but nothing on
+# it would be readable in print.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tzdata ca-certificates \
+    && apt-get install -y --no-install-recommends tzdata ca-certificates fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
