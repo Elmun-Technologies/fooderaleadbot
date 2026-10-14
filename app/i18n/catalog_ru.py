@@ -123,7 +123,11 @@ CATALOG: dict[str, str] = {
     ),
     "support.line": "Если есть вопросы: {username}",
     # --------------------------------------------------- guest badge (ГОСТЬ)
-    "badge.event_title": "FOODERA EXPO 2026",
+    # NOTE: badge.wordmark / year / tagline / event_line / visitor_label / hint are painted
+    # onto the PNG with DejaVu, which has no emoji glyphs - keep those values emoji-free.
+    "badge.wordmark": "FOODERA",
+    "badge.year": "EXPO 2026",
+    "badge.tagline": "ВЫСТАВКА ПРОДУКТОВ ПИТАНИЯ И НАПИТКОВ",
     "badge.event_line": "27–29 октября 2026 · SOF EXPO, Самарканд",
     "badge.visitor_label": "ГОСТЬ",
     "badge.hint": "Покажите этот бейдж на входе",
@@ -134,8 +138,7 @@ CATALOG: dict[str, str] = {
     ),
     "badge.command": "🎫 Получить бейдж",
     "badge.no_application": (
-        "🎫 Чтобы получить бейдж, сначала зарегистрируйтесь как гость.\n\n"
-        "/start — регистрация"
+        "🎫 Чтобы получить бейдж, сначала зарегистрируйтесь как гость.\n\n/start — регистрация"
     ),
     "badge.disabled": "🎫 Бейдж пока недоступен.",
     "badge.error": "Не удалось подготовить бейдж. Пожалуйста, попробуйте позже.",
@@ -250,5 +253,4 @@ CATALOG: dict[str, str] = {
     "admin.broadcast_sent": "📢 Рассылка началась: будет отправлено {count} лидам",
     "admin.chat_sent": "✅ Сообщение отправлено",
     "info.no_active_form": "Нет активной анкеты. Нажмите /start чтобы начать",
-
 }

@@ -52,9 +52,10 @@ visitor / exhibitor                private sales group                database
 - **Posts a card into the sales group** with the answers, contacts, source, a lead code
   (`FD000042`) and four status buttons; the card is edited in place as the status changes.
 - **Hands every guest a badge.** A finished visitor registration is answered with an
-  auto-generated `MEHMON` badge (PNG, 900×1200, QR code of the lead code) that is printed and
-  shown at the entrance; `/beydjik` re-sends it on demand and the admin panel downloads the same
-  PNG for the printer. Exhibitors are never sent one.
+  auto-generated `MEHMON` badge in the FOODERA blue-and-gold brand design (PNG, 900×1200, QR
+  code of the lead code) that is printed and shown at the entrance; `/beydjik` re-sends it on
+  demand and the admin panel downloads the same PNG for the printer. Exhibitors are never sent
+  one.
 - **Keeps the funnel honest**: `lead_events` records every step, so `/stats` shows real
   conversion numbers (starts → language → intent → … → done), source performance, and stale drafts.
 - **Survives restarts**: drafts are re-opened from the database (`DRAFT_TTL_HOURS`), stale button
@@ -273,26 +274,41 @@ for the leads that actually have them, so a card built from the simplified funne
 
 ## Guest badge (`MEHMON BEYDJIGI`)
 
-A visitor who finishes the four-question funnel gets a picture they can show (or print) at the
-entrance. It is drawn from scratch with Pillow — no template file, no assets, no database
-columns — from the lead row itself, so it is always up to date and can be re-generated at any
-time ([`app/services/badge_service.py`](app/services/badge_service.py)):
+A visitor who finishes the four-question funnel gets the official FOODERA guest card — printed
+at home or shown on the phone at the entrance. It is drawn from scratch with Pillow (no
+template file, no database columns) from the lead row itself, so it is always up to date and
+can be re-generated at any time ([`app/services/badge_service.py`](app/services/badge_service.py)):
 
 ```text
 ┌──────────────────────────────────────────┐
-│           FOODERA EXPO 2026              │  900×1200 px, #111827 header
-│  27–29 oktabr 2026 · SOF EXPO, Samarqand │
+│ ▚▚ deep-azure header: gradient + stripes  │  900×1200 px, cream card (#FAF6EE),
+│     ◉ FOODERA emblem (or your logo)      │  2 px gold frame, 18 px paper margin
+│  27–29 oktabr 2026 · SOF EXPO, Samarqand │  date + tagline inside the header
+│ ══════════════ gold rule ═══════════════ │
 │  ┌────────────────────────────────────┐  │
-│  │              MEHMON                │  │  blue ribbon (ГОСТЬ in Russian)
+│  │              MEHMON                │  │  azure ribbon, gold edges (ГОСТЬ in Russian)
 │  └────────────────────────────────────┘  │
-│             Malika Rahimova              │  name: one line, two lines or a smaller font
-│                Samarqand                 │  region, localized
-│              [ QR CODE ]                 │  encodes the lead code (FD000123)
-│               FD000123                   │
+│             Malika Rahimova              │  name: 74 px, 52 px on two lines, then an ellipsis
+│              ✦────✦────✦                 │  gold divider with an eight-pointed star
+│            ⌖  Samarqand                  │  sand pill, gold contour, blue map pin
+│        ┌────────────────────┐            │
+│        │  ┌──────────────┐  │            │  white QR talon, blue scanner brackets,
+│        │  │  [ QR CODE ] │  │            │  gold contour, vine ornament on both sides
+│        │  └──────────────┘  │            │
+│        ├╌╌╌╌╌╌╌╌╌◇╌╌╌╌╌╌╌╌╌┤            │  perforation with a gold diamond
+│        │     FD000123      │            │  letter-spaced lead code
+│        └────────────────────┘            │
 │   Kirishda ushbu beydjikni ko‘rsating    │
 └──────────────────────────────────────────┘
 ```
 
+* **Brand design**: the FOODERA blue-and-gold identity — deep azure header and ribbon, gold
+  rules and star, cream paper with a vine pattern (the full palette is a table in
+  [`app/assets/brand/README.md`](app/assets/brand/README.md)). The header centre carries a
+  drawn emblem (white disc, gold ring, two overlapping eight-pointed stars, `FOODERA` /
+  `EXPO 2026`); drop the official logo as `app/assets/brand/logo.png` and it replaces the
+  emblem automatically — scaled into a 560×260 box, aspect kept, no code change. A missing or
+  corrupt logo file only logs a warning.
 * **Automatic**: `generate_badge(lead, lang)` is a pure function returning PNG bytes; the funnel
   sends it as a photo (`BufferedInputFile`, in memory — nothing is written to disk) right after
   the thank-you message, in the language the guest used.
@@ -308,8 +324,10 @@ time ([`app/services/badge_service.py`](app/services/badge_service.py)):
   `GET /admin/leads/{id}/badge` as `FD000123_badge.png` (`Content-Disposition: attachment`) — for
   the printer at the venue. Exhibitor leads do not show the button (and get a 404).
 * **`VISITOR_BADGE_ENABLED=false`** switches the whole feature off.
-* Fonts: `fonts-dejavu-core` is installed in the [`Dockerfile`](Dockerfile); without it the badge
-  still renders through PIL's built-in font instead of crashing.
+* Fonts: the chain is `fonts-dejavu-core` (installed in the [`Dockerfile`](Dockerfile)) → any
+  system font that really prints `ГОСТЬ` → PIL's built-in bitmap font, so a slim image degrades
+  instead of crashing. Resolved paths and loaded faces are cached (`clear_font_cache()` forgets
+  them).
 
 ---
 
