@@ -42,6 +42,7 @@ _ADMIN_COMMANDS = (
     "warm",
     "today",
     "source",
+    "link",
     "lead",
     "setstatus",
     "chatid",
@@ -147,6 +148,13 @@ async def admin_command(message: Message, command: CommandObject, **data: Any) -
 
     if name == "source":
         await _reply(message, await _sources(repo))
+        return
+
+    if name == "link":
+        await _reply(
+            message,
+            await _tracking_link_command(repo, bot or message.bot, args, message.from_user),
+        )
         return
 
     if name == "lead":
@@ -396,6 +404,69 @@ async def _stats(repo: Any, settings: Settings) -> str:
         ),
     ]
     return "\n".join(lines)
+
+
+async def _tracking_link_command(repo: Any, bot: Any, args: str, from_user: Any) -> str:
+    """Dead-simple ``/link``: a NAME in -> a ready link out, stats when called bare.
+
+    * ``/link Instagram dekabr`` - creates the link and returns the URL to paste.
+    * ``/link``                  - shows every link with its numbers.
+    """
+    from app.services.tracking_links import (
+        build_deep_link,
+        detect_source,
+        slugify,
+        source_choice_label,
+        unique_payload,
+    )
+
+    me = await bot.get_me()
+    username = me.username or "your_bot"
+    args = (args or "").strip()
+
+    if not args:
+        rows = await repo.tracking_link_stats()
+        lines = [
+            "<b>🔗 Reklama linklari</b>",
+            "",
+            "Yangi link: <code>/link Nomi</code> (masalan: <code>/link Instagram dekabr</code>)",
+            "Admin panelda boshqarish: <b>/admin/links</b>",
+        ]
+        if rows:
+            lines.append("")
+            for row in rows[:15]:
+                lines.append(
+                    f"<b>{esc(row['title'])}</b>\n"
+                    f"  <code>{esc(build_deep_link(username, row['payload']))}</code>\n"
+                    f"  start: {row['starts']} · anketa: {row['leads']} · "
+                    f"saralangan: {row['qualified']}"
+                )
+        else:
+            lines.extend(["", "<i>Hozircha linklar yo'q.</i>"])
+        return "\n".join(lines)
+
+    title = args[:128]
+    base = slugify(title)
+    if not base:
+        return "Nom harf yoki raqamlardan iborat bo'lsin. Masalan: /link Instagram dekabr"
+
+    taken = await repo.tracking_payloads()
+    payload = unique_payload(base, taken)
+    source = detect_source(title)
+    link = await repo.create_tracking_link(
+        title=title,
+        payload=payload,
+        source=source,
+        created_by=from_user.id if from_user else None,
+    )
+    url = build_deep_link(username, link.payload)
+    return (
+        f"✅ <b>{esc(title)}</b> uchun link tayyor:\n"
+        f"<code>{esc(url)}</code>\n\n"
+        f"Manba: <b>{esc(source_choice_label(source))}</b>\n"
+        "Shu linkni reklamaga qo'ying - kim bosganini bot o'zi sanaydi.\n"
+        "Natijalar: /link yoki admin paneldagi \"Reklama linklari\" sahifasi."
+    )
 
 
 async def _sources(repo: Any) -> str:

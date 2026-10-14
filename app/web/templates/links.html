@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}{{ t('ad_links') }} — FOODERA Admin{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-gray-900"><i class="fas fa-link mr-2"></i>{{ t('ad_links') }}</h1>
+</div>
+
+<!-- How it works -->
+<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-sm text-blue-900">
+    <div class="font-semibold mb-2"><i class="fas fa-info-circle mr-1"></i> {{ t('links_how_title') }}</div>
+    <ol class="list-decimal ml-5 space-y-1">
+        <li>{{ t('links_how_1') }}</li>
+        <li>{{ t('links_how_2') }}</li>
+        <li>{{ t('links_how_3') }}</li>
+    </ol>
+</div>
+
+{% if error %}
+<div class="bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 mb-4 text-sm">
+    <i class="fas fa-exclamation-triangle mr-1"></i> {{ t('links_error_name') }}
+</div>
+{% endif %}
+
+{% if created_payload %}
+<div class="bg-green-50 border border-green-200 text-green-900 rounded-lg p-4 mb-4 text-sm">
+    <div class="font-semibold mb-1"><i class="fas fa-check-circle mr-1"></i> {{ t('link_created') }}</div>
+    <div class="flex items-center gap-2 flex-wrap">
+        <code id="new-link" class="bg-white border rounded px-2 py-1 text-xs break-all">https://t.me/{{ bot_username or 'YOUR_BOT' }}?start={{ created_payload }}</code>
+        <button onclick="copyText('https://t.me/{{ bot_username or 'YOUR_BOT' }}?start={{ created_payload }}', this)"
+                class="px-3 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+            <i class="fas fa-copy mr-1"></i>{{ t('copy') }}
+        </button>
+    </div>
+</div>
+{% endif %}
+
+<!-- Create form -->
+<div class="bg-white rounded-lg shadow-sm border p-5 mb-6">
+    <h2 class="font-semibold text-gray-900 mb-3">{{ t('create_link') }}</h2>
+    <form method="post" action="/admin/links/create" class="grid grid-cols-1 md:grid-cols-[1fr_220px_auto] gap-3 items-end">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('link_name') }}</label>
+            <input type="text" name="title" required maxlength="128"
+                   placeholder="{{ t('link_name_placeholder') }}"
+                   class="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:outline-none">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('link_source') }}</label>
+            <select name="source" class="w-full border rounded-md px-3 py-2 text-sm bg-white">
+                {% for key, label in source_choices %}
+                <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="px-5 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-700">
+            <i class="fas fa-plus mr-1"></i>{{ t('create') }}
+        </button>
+    </form>
+    <p class="text-xs text-gray-500 mt-2">{{ t('link_name_hint') }}</p>
+</div>
+
+<!-- Links table -->
+<div class="bg-white rounded-lg shadow-sm border overflow-x-auto">
+    {% if links %}
+    <table class="min-w-full text-sm">
+        <thead class="bg-gray-50 text-gray-600 text-left">
+            <tr>
+                <th class="px-4 py-3 font-medium">{{ t('link_name') }}</th>
+                <th class="px-4 py-3 font-medium">{{ t('link_source') }}</th>
+                <th class="px-4 py-3 font-medium">{{ t('link') }}</th>
+                <th class="px-4 py-3 font-medium text-center" title="{{ t('starts_hint') }}">{{ t('starts') }}</th>
+                <th class="px-4 py-3 font-medium text-center" title="{{ t('apps_hint') }}">{{ t('applications') }}</th>
+                <th class="px-4 py-3 font-medium text-center" title="{{ t('qualified_hint') }}">{{ t('qualified') }}</th>
+                <th class="px-4 py-3 font-medium">{{ t('created') }}</th>
+                <th class="px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y">
+            {% for link in links %}
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 font-medium text-gray-900">{{ link.title }}</td>
+                <td class="px-4 py-3 text-gray-600">{{ link.source_label }}</td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center gap-2">
+                        <code class="text-xs bg-gray-100 rounded px-2 py-1 break-all">{{ link.url }}</code>
+                        <button onclick="copyText('{{ link.url }}', this)"
+                                class="shrink-0 px-2 py-1 border rounded text-xs text-gray-700 hover:bg-gray-100">
+                            <i class="fas fa-copy"></i> {{ t('copy') }}
+                        </button>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-center font-semibold">{{ link.starts }}</td>
+                <td class="px-4 py-3 text-center font-semibold text-blue-700">{{ link.leads }}</td>
+                <td class="px-4 py-3 text-center font-semibold text-green-700">{{ link.qualified }}</td>
+                <td class="px-4 py-3 text-gray-500 whitespace-nowrap">{{ link.created_at.strftime('%d.%m.%Y') if link.created_at else '—' }}</td>
+                <td class="px-4 py-3 text-right">
+                    <form method="post" action="/admin/links/{{ link.id }}/delete"
+                          onsubmit="return confirm('{{ t('delete_confirm') }}');">
+                        <button type="submit" class="text-red-500 hover:text-red-700 px-2" title="{{ t('delete') }}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="p-8 text-center text-gray-500 text-sm">
+        <i class="fas fa-link text-3xl mb-3 block text-gray-300"></i>
+        {{ t('no_links') }}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function copyText(text, btn) {
+    const done = () => {
+        const old = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> {{ t("copied") }}';
+        setTimeout(() => { btn.innerHTML = old; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done);
+    } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        done();
+    }
+}
+</script>
+
+{% endblock %}

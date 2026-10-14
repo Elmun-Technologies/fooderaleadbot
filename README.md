@@ -329,8 +329,19 @@ NEW ──► CONTACTED ──► NEGOTIATION ──► BOOKED ──► CLOSED
 
 **User** (private chat): `/start [payload]` · `/help` · `/restart`
 **Admin** (any chat, restricted to `ADMIN_USER_IDS`): `/stats` · `/leads [n]` · `/hot [n]` ·
-`/warm [n]` · `/today` · `/source` · `/lead <id|FD000042>` · `/setstatus <id|FD000042> <STATUS>` ·
-`/chatid`
+`/warm [n]` · `/today` · `/source` · `/link [name]` · `/lead <id|FD000042>` ·
+`/setstatus <id|FD000042> <STATUS>` · `/chatid`
+
+**Tracking links ("Reklama linklari").** Every ad placement gets its own named link so
+`/source` and the admin panel show exactly which ad brought each lead:
+
+- `/link Instagram dekabr` → creates the link and replies with a ready URL
+  (`https://t.me/<bot>?start=instagram_dekabr`); the source is guessed from the name.
+- `/link` with no arguments lists every link with its numbers (starts → applications → qualified).
+- The admin panel page **/admin/links** does the same with a form, copy buttons and a live
+  stats table; links are stored in the `tracking_links` table.
+- On `/start` the payload is first looked up in `tracking_links` (stored source wins);
+  unknown payloads still fall back to the `parse_start_payload` grammar, so nothing is lost.
 
 Callback data (small, stable grammar — every handler is idempotent):
 
