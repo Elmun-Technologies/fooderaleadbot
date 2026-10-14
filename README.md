@@ -329,8 +329,13 @@ NEW ──► CONTACTED ──► NEGOTIATION ──► BOOKED ──► CLOSED
 
 **User** (private chat): `/start [payload]` · `/help` · `/restart`
 **Admin** (any chat, restricted to `ADMIN_USER_IDS`): `/stats` · `/leads [n]` · `/hot [n]` ·
-`/warm [n]` · `/today` · `/source` · `/lead <id|FD000042>` · `/setstatus <id|FD000042> <STATUS>` ·
-`/chatid`
+`/warm [n]` · `/today` · `/source` · `/link [source campaign creative]` · `/lead <id|FD000042>` ·
+`/setstatus <id|FD000042> <STATUS>` · `/chatid`
+
+`/link` builds a ready-to-paste attribution deep link for an ad placement, e.g.
+`/link tgads foodera video01` → `https://t.me/<bot>?start=tgads_foodera_video01`, and
+previews how the payload will be classified (source / campaign / creative). Give every
+ad its own link and `/source` will show exactly which ad each lead came from.
 
 Callback data (small, stable grammar — every handler is idempotent):
 

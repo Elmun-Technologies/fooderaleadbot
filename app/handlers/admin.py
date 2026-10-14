@@ -8,6 +8,7 @@ card may additionally be used by members of the private sales group (toggle with
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -23,7 +24,7 @@ from app.filters import IsOwnerOrAdmin
 from app.i18n import option_label, t
 from app.services.lead_service import LeadService
 from app.services.notification import LeadNotifier, build_lead_card
-from app.services.source_tracking import SOURCE_LABELS
+from app.services.source_tracking import SOURCE_ALIASES, SOURCE_LABELS, parse_start_payload
 from app.services.statuses import ACTION_STATUS, STATUS_LABEL_KEYS, is_valid_status
 from app.utils.text import clean_text, esc, format_datetime
 
@@ -42,6 +43,7 @@ _ADMIN_COMMANDS = (
     "warm",
     "today",
     "source",
+    "link",
     "lead",
     "setstatus",
     "chatid",
@@ -147,6 +149,10 @@ async def admin_command(message: Message, command: CommandObject, **data: Any) -
 
     if name == "source":
         await _reply(message, await _sources(repo))
+        return
+
+    if name == "link":
+        await _reply(message, await _build_tracking_link(bot or message.bot, args))
         return
 
     if name == "lead":
@@ -396,6 +402,83 @@ async def _stats(repo: Any, settings: Settings) -> str:
         ),
     ]
     return "\n".join(lines)
+
+
+_LINK_EXAMPLES = (
+    ("tgads foodera video01", "Telegram Ads reklamasi"),
+    ("channel kiss post12", "Telegram kanaldagi post"),
+    ("instagram promo story1", "Instagram story / post"),
+    ("qr tashkent banner1", "QR kod / banner (offline)"),
+)
+
+
+def format_tracking_link(bot_username: str, args: str) -> str:
+    """Build a ready-to-use attribution deep link from free-form admin input.
+
+    ``/link tgads foodera video01`` ->
+    ``https://t.me/<bot>?start=tgads_foodera_video01`` plus a preview of how the
+    payload will be classified (source / campaign / creative).
+    """
+    args = (args or "").strip()
+    if not args:
+        lines = [
+            "<b>🔗 Treking link yaratish</b>",
+            "",
+            "Har bir reklama uchun ALOHIDA link yarating - shunda /source hisobotida",
+            "qaysi reklamadan nechta lead kelgani ko'rinadi.",
+            "",
+            "Format: <code>/link &lt;manba&gt; &lt;kampaniya&gt; [kreativ]</code>",
+            "",
+            "Misollar:",
+        ]
+        for example, note in _LINK_EXAMPLES:
+            payload = _sanitize_payload(example)
+            lines.append(
+                f"• <code>/link {esc(example)}</code> - {esc(note)}\n"
+                f"  → <code>https://t.me/{esc(bot_username)}?start={esc(payload)}</code>"
+            )
+        known = ", ".join(sorted(SOURCE_ALIASES))
+        lines.extend(["", f"<i>Tanilgan manba kodlari: {esc(known)}</i>"])
+        return "\n".join(lines)
+
+    payload = _sanitize_payload(args)
+    if not payload:
+        return "Linkda faqat lotin harflari, raqamlar, '_' va '-' ishlatilishi mumkin."
+
+    info = parse_start_payload(payload)
+    link = f"https://t.me/{bot_username}?start={payload}"
+    lines = [
+        "<b>🔗 Tayyor treking link:</b>",
+        f"<code>{esc(link)}</code>",
+        "",
+        "Bot qanday qayd etadi:",
+        f"• Manba: <b>{esc(info.source_label)}</b>",
+        f"• Kampaniya: <code>{esc(info.campaign or '—')}</code>",
+        f"• Kreativ: <code>{esc(info.creative or '—')}</code>",
+    ]
+    if info.source in ("unknown", "direct"):
+        known = ", ".join(sorted(SOURCE_ALIASES))
+        lines.extend(
+            [
+                "",
+                "⚠️ Birinchi so'z tanilgan manba kodi emas, shuning uchun hisobotda",
+                "<b>Unknown</b> bo'lib ko'rinadi. Tanilgan kodlardan birini ishlating:",
+                f"<i>{esc(known)}</i>",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def _sanitize_payload(args: str) -> str:
+    """Telegram start payload: A-Z a-z 0-9 _ - only, max 64 chars."""
+    payload = re.sub(r"\s+", "_", args.strip().lower())
+    payload = re.sub(r"[^a-z0-9_\-]", "", payload)
+    return payload.strip("_-")[:64]
+
+
+async def _build_tracking_link(bot: Any, args: str) -> str:
+    me = await bot.get_me()
+    return format_tracking_link(me.username or "your_bot", args)
 
 
 async def _sources(repo: Any) -> str:
