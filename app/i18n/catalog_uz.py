@@ -128,9 +128,11 @@ CATALOG: dict[str, str] = {
     ),
     "support.line": "Savollar bo‘lsa: {username}",
     # --------------------------------------------------- guest badge (MEHMON)
-    # NOTE: badge.event_title / event_line / visitor_label / hint are painted onto the PNG
-    # with DejaVu, which has no emoji glyphs - keep those four values emoji-free.
-    "badge.event_title": "FOODERA EXPO 2026",
+    # NOTE: badge.wordmark / year / tagline / event_line / visitor_label / hint are painted
+    # onto the PNG with DejaVu, which has no emoji glyphs - keep those values emoji-free.
+    "badge.wordmark": "FOODERA",
+    "badge.year": "EXPO 2026",
+    "badge.tagline": "OZIQ-OVQAT VA ICHIMLIKLAR KO‘RGAZMASI",
     "badge.event_line": "27–29 oktabr 2026 · SOF EXPO, Samarqand",
     "badge.visitor_label": "MEHMON",
     "badge.hint": "Kirishda ushbu beydjikni ko‘rsating",
@@ -259,5 +261,4 @@ CATALOG: dict[str, str] = {
     "admin.broadcast_sent": "📢 Rassilka boshlandi: {count} ta leadga yuboriladi",
     "admin.chat_sent": "✅ Xabar yuborildi",
     "info.no_active_form": "Aktiv so'rovnoma yo'q. Boshlash uchun /start bosing",
-
 }
