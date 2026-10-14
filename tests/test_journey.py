@@ -22,8 +22,9 @@ from aiogram.methods import (
     EditMessageText,
     GetMe,
     SendMessage,
+    SendPhoto,
 )
-from aiogram.types import Chat, Message, Update, User
+from aiogram.types import BufferedInputFile, Chat, Message, PhotoSize, Update, User
 from app.bot import create_dispatcher
 from app.config import Settings
 from app.database.models import Classification, LeadStatus
@@ -60,7 +61,14 @@ class RecordingSession(BaseSession):
     ) -> AsyncGenerator[bytes, None]:  # pragma: no cover
         yield b""
 
-    def _message(self, chat_id: int, text: str | None, message_id: int | None = None) -> Message:
+    def _message(
+        self,
+        chat_id: int,
+        text: str | None,
+        message_id: int | None = None,
+        *,
+        photo: bool = False,
+    ) -> Message:
         chat_type = "private" if (chat_id or 0) > 0 else "supergroup"
         if message_id is None:
             self._next_id += 1
@@ -70,6 +78,18 @@ class RecordingSession(BaseSession):
             date=datetime.now(UTC),
             chat=Chat(id=chat_id, type=chat_type),
             text=text,
+            photo=(
+                [
+                    PhotoSize(
+                        file_id=f"badge-{message_id}",
+                        file_unique_id=f"uq-badge-{message_id}",
+                        width=900,
+                        height=1200,
+                    )
+                ]
+                if photo
+                else None
+            ),
         )
 
     async def make_request(self, bot: Bot, method: Any, timeout: int | None = None) -> Any:
@@ -78,6 +98,9 @@ class RecordingSession(BaseSession):
             return User(id=777, is_bot=True, first_name="FOODERA EXPO", username="foodera_bot")
         if isinstance(method, SendMessage):
             return self._message(int(method.chat_id), method.text)
+        if isinstance(method, SendPhoto):
+            # the guest badge: the PNG travels in memory (BufferedInputFile), never on disk
+            return self._message(int(method.chat_id), method.caption, photo=True)
         if isinstance(method, (EditMessageText, EditMessageReplyMarkup)):
             return self._message(
                 int(method.chat_id), getattr(method, "text", None), message_id=method.message_id
@@ -95,6 +118,19 @@ class RecordingSession(BaseSession):
             for method in self.calls
             if isinstance(method, SendMessage) and int(method.chat_id) == chat_id
         ]
+
+    def photos_to(self, chat_id: int) -> list[tuple[bytes, str]]:
+        """``(png, caption)`` of every photo sent to a chat, in order."""
+        photos: list[tuple[bytes, str]] = []
+        for method in self.calls:
+            if not isinstance(method, SendPhoto) or int(method.chat_id) != chat_id:
+                continue
+            photo = method.photo
+            if isinstance(photo, BufferedInputFile):
+                photos.append((bytes(photo.data), str(method.caption or "")))
+            else:  # a file_id - a re-sent photo, not a freshly generated badge
+                photos.append((b"", str(method.caption or "")))
+        return photos
 
     def edits(self) -> list[str]:
         return [method.text or "" for method in self.calls if isinstance(method, EditMessageText)]
@@ -466,6 +502,108 @@ class TestJourney:
         assert leads[0].preferred_stand_size is None
         assert leads[0].business_relation is None
         assert "mehmon" in session.sent_to(PRIVATE_CHAT)[-1].lower()
+
+    async def test_a_finished_guest_registration_receives_the_badge_photo(
+        self, harness: Harness, session: RecordingSession, repo: LeadRepository
+    ) -> None:
+        """The whole point of the feature: register as a guest -> the badge arrives."""
+        await harness.send("/start")
+        await harness.press("lang:uz")
+        await harness.press("flow:start")
+        await harness.press("q:intent:visitor")
+        await harness.send("Malika Rahimova")
+        await harness.send(contact_phone="+998905554433")
+        await harness.press("q:visitor_region:samarkand")
+
+        photos = session.photos_to(PRIVATE_CHAT)
+        assert len(photos) == 1, "exactly one badge, right after the thank-you message"
+        png, caption = photos[0]
+        assert png.startswith(b"\x89PNG"), "the badge is a PNG built in memory"
+        assert "🎫" in caption
+        assert "SOF EXPO" in caption
+
+        # ordering: the guest reads the thank-you message first, the picture arrives after it
+        kinds = [
+            "photo" if isinstance(call, SendPhoto) else "text"
+            for call in session.calls
+            if isinstance(call, (SendMessage, SendPhoto)) and int(call.chat_id) == PRIVATE_CHAT
+        ]
+        assert kinds[-2:] == ["text", "photo"], kinds
+        assert "Rahmat" in session.messages_to(PRIVATE_CHAT)[-1]
+
+        # the delivered bytes are exactly the badge drawn for the stored lead, so the QR
+        # inside them carries this guest's lead_code (the design itself is tested in
+        # tests/test_badge.py)
+        from app.services.badge_service import generate_badge
+
+        lead = (await repo.list_leads())[0]
+        assert png == generate_badge(lead, lead.language)
+
+    async def test_a_russian_guest_gets_a_russian_caption(
+        self, harness: Harness, session: RecordingSession
+    ) -> None:
+        await harness.send("/start")
+        await harness.press("lang:ru")
+        await harness.press("flow:start")
+        await harness.press("q:intent:visitor")
+        await harness.send("Малика")
+        await harness.press("nav:skip")  # phone is optional
+        await harness.press("q:visitor_region:tashkent")
+
+        photos = session.photos_to(PRIVATE_CHAT)
+        assert len(photos) == 1
+        assert "бейдж" in photos[0][1].lower()
+
+    async def test_an_exhibitor_never_receives_a_badge(
+        self, harness: Harness, session: RecordingSession, settings
+    ) -> None:
+        await complete_questionnaire(harness)
+
+        assert session.sent_to(settings.sales_group_id), "the exhibitor lead reached the group"
+        assert session.photos_to(PRIVATE_CHAT) == [], "badges are visitors only"
+
+    async def test_beydjik_command_resends_the_badge(
+        self, harness: Harness, session: RecordingSession
+    ) -> None:
+        await harness.send("/start")
+        await harness.press("lang:uz")
+        await harness.press("flow:start")
+        await harness.press("q:intent:visitor")
+        await harness.send("Malika")
+        await harness.press("nav:skip")
+        await harness.press("q:visitor_region:bukhara")
+        assert len(session.photos_to(PRIVATE_CHAT)) == 1  # sent by the funnel itself
+
+        await harness.send("/beydjik")
+
+        photos = session.photos_to(PRIVATE_CHAT)
+        assert len(photos) == 2, "/beydjik must regenerate and resend the badge"
+        assert photos[1][0].startswith(b"\x89PNG")
+        assert photos[1][1] == photos[0][1]  # same caption, same design
+
+    async def test_beydjik_without_a_guest_registration_offers_to_register(
+        self, harness: Harness, session: RecordingSession
+    ) -> None:
+        await harness.send("/start")
+        await harness.press("lang:uz")
+        session.calls.clear()
+
+        await harness.send("/beydjik")
+
+        assert session.photos_to(PRIVATE_CHAT) == []
+        assert "ro‘yxatdan o‘ting" in session.last_text()
+        assert session.last_keyboard_callbacks() == ["flow:start"]
+
+    async def test_beydjik_does_not_give_an_exhibitor_a_badge(
+        self, harness: Harness, session: RecordingSession
+    ) -> None:
+        await complete_questionnaire(harness)
+        session.calls.clear()
+
+        await harness.send("/beydjik")
+
+        assert session.photos_to(PRIVATE_CHAT) == []
+        assert "ro‘yxatdan o‘ting" in session.last_text()
 
     async def test_foreign_visitor_is_asked_for_the_country_then_finishes(
         self, harness: Harness, session: RecordingSession, repo: LeadRepository

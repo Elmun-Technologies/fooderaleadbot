@@ -9,7 +9,16 @@ from __future__ import annotations
 
 from aiogram import Router
 
-from app.handlers import admin, fallback, group_chat, language, qualification, start, visitor
+from app.handlers import (
+    admin,
+    badge,
+    fallback,
+    group_chat,
+    language,
+    qualification,
+    start,
+    visitor,
+)
 
 __all__ = ["on_error", "routers"]
 
@@ -21,6 +30,7 @@ def routers() -> list[Router]:
     return [
         start.router,
         language.router,
+        badge.router,
         visitor.router,
         qualification.router,
         admin.router,

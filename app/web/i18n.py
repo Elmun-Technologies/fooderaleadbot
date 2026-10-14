@@ -96,6 +96,9 @@ TRANSLATIONS = {
         "stage_draft": "Anketa chala",
         "stage_completed": "Tugatgan",
         "no_people_yet": "Bu link orqali hali hech kim kelmagan.",
+        "badge_download": "🎫 Beydjik yuklab olish",
+        "badge_visitors_only": "Beydjik faqat mehmon (visitor) arizalari uchun.",
+        "badge_failed": "Beydjikni yasashda xatolik. Loglarni tekshiring.",
     },
     "ru": {
         "login": "Вход",
@@ -190,6 +193,9 @@ TRANSLATIONS = {
         "stage_draft": "Анкета не закончена",
         "stage_completed": "Завершил",
         "no_people_yet": "По этой ссылке пока никто не пришёл.",
+        "badge_download": "🎫 Скачать бейдж",
+        "badge_visitors_only": "Бейдж доступен только для заявок гостей (visitor).",
+        "badge_failed": "Ошибка при создании бейджа. Проверьте логи.",
     },
 }
 

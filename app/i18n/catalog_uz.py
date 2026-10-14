@@ -127,6 +127,27 @@ CATALOG: dict[str, str] = {
         "📅 27–29 oktabr 2026\n📍 SOF EXPO, Samarqand"
     ),
     "support.line": "Savollar bo‘lsa: {username}",
+    # --------------------------------------------------- guest badge (MEHMON)
+    # NOTE: badge.event_title / event_line / visitor_label / hint are painted onto the PNG
+    # with DejaVu, which has no emoji glyphs - keep those four values emoji-free.
+    "badge.event_title": "FOODERA EXPO 2026",
+    "badge.event_line": "27–29 oktabr 2026 · SOF EXPO, Samarqand",
+    "badge.visitor_label": "MEHMON",
+    "badge.hint": "Kirishda ushbu beydjikni ko‘rsating",
+    "badge.caption": (
+        "🎫 Sizning beydjigingiz tayyor!\n"
+        "Kirishda ko‘rsating.\n"
+        "📅 27–29 oktabr 2026 · 📍 SOF EXPO, Samarqand"
+    ),
+    "badge.command": "🎫 Beydjikni olish",
+    "badge.no_application": (
+        "🎫 Beydjikni olish uchun avval mehmon sifatida ro‘yxatdan o‘ting.\n\n"
+        "/start — ro‘yxatdan o‘tish"
+    ),
+    "badge.disabled": "🎫 Beydjik hozircha mavjud emas.",
+    "badge.error": (
+        "Beydjikni tayyorlashda xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko‘ring."
+    ),
     # ---------------------------------------------------------- lead card
     "card.title_lead": "🔥 FOODERA — YANGI LEAD",
     "card.title_visitor": "👤 FOODERA — MEHMON RO‘YXATGA OLINDI",
