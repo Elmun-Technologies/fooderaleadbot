@@ -1,15 +1,23 @@
-"""Ad tracking links page: create a named link, copy it, watch per-link stats."""
+"""Ad tracking links page: create a named link, copy it, watch per-link stats.
+
+The list page counts starts → applications → qualified; ``/admin/links/{id}``
+opens the breakdown for one link and answers "who exactly came through it and how
+far did they get".
+"""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import Settings, get_settings
+from app.database.models import Classification, LeadStatus
+from app.database.repository import TRACKING_STAGES
 from app.services.tracking_links import (
     SOURCE_CHOICES,
     build_deep_link,
@@ -30,6 +38,22 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.globals["t"] = translate
 
 router = APIRouter()
+
+_QUALIFIED: tuple[str, ...] = (Classification.HOT.value, Classification.WARM.value)
+
+#: ``?stage=`` values the detail page understands (None / junk = everyone)
+_STAGE_FILTERS: tuple[str, ...] = (*TRACKING_STAGES, "qualified", "booked")
+
+
+def _matches_stage(person: dict[str, Any], stage: str) -> bool:
+    """Is this person part of the funnel slice the card stands for?"""
+    lead = person["lead"]
+    if stage == "qualified":
+        return lead is not None and lead.classification in _QUALIFIED
+    if stage == "booked":
+        return lead is not None and lead.lead_status == LeadStatus.BOOKED.value
+    return person["stage"] == stage
+
 
 # The bot username is fetched once and cached (needed to build t.me links).
 _bot_username: str | None = None
@@ -95,6 +119,54 @@ async def links_page(
             ],
             "created_payload": created,
             "error": error,
+        },
+    )
+
+
+@router.get("/links/{link_id}", response_class=HTMLResponse)
+async def link_detail(
+    request: Request,
+    link_id: int,
+    # the dependencies of this route use ``Annotated``: the ``Depends(...)`` calls
+    # in default values trigger ruff B008 on every route that uses them
+    user: Annotated[str, Depends(require_auth)],
+    lang: Annotated[str, Depends(get_lang)],
+    repo: Annotated[Any, Depends(get_repo)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    stage: str | None = Query(default=None),
+):
+    """One link in detail: the funnel and the actual people behind every number."""
+    link = await repo.get_tracking_link(link_id)
+    if link is None:
+        return RedirectResponse(url="/admin/links", status_code=302)
+
+    people = await repo.tracking_link_people(link.payload)
+    counts: dict[str, int] = {
+        "total": len(people),
+        **{
+            key: sum(1 for person in people if _matches_stage(person, key))
+            for key in _STAGE_FILTERS
+        },
+    }
+
+    active_stage = stage if stage in _STAGE_FILTERS else None
+    if active_stage:
+        people = [person for person in people if _matches_stage(person, active_stage)]
+
+    username = await _get_bot_username(settings)
+    return templates.TemplateResponse(
+        request,
+        "link_detail.html",
+        {
+            "lang": lang,
+            "t": lambda k: translate(k, lang),
+            "user": user,
+            "link": link,
+            "url": build_deep_link(username or "YOUR_BOT", link.payload),
+            "source_label": source_choice_label(link.source, lang),
+            "people": people,
+            "counts": counts,
+            "active_stage": active_stage,
         },
     )
 

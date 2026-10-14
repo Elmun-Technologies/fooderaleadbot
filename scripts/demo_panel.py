@@ -28,7 +28,7 @@ import uvicorn
 import app.web.deps as web_deps
 import app.web.routers.links as links_router
 from app.config import get_settings
-from app.database.models import Classification
+from app.database.models import Classification, LeadStatus
 from app.database.repository import LeadRepository
 from app.database.session import create_database
 from app.web.app import app
@@ -51,34 +51,47 @@ async def seed() -> None:
             ("Telegram Ads yangi yil", "telegram_ads_yangi_yil", "telegram_ads", 58, 21, 9),
             ("QR banner Expo kirish", "qr_banner_expo_kirish", "qr", 11, 4, 1),
         ]
+        names = ["Aziz", "Dilnoza", "Bekzod", "Nodira", "Sardor", "Kamola", "Jasur", "Malika"]
         uid = 1000
         for title, payload, source, starts, leads, qualified in demo_links:
             await repo.create_tracking_link(title=title, payload=payload, source=source)
             for i in range(starts):
                 uid += 1
+                name = names[i % len(names)]
+                username = f"{name.lower()}_{uid}"
                 await repo.get_or_create_user(
                     telegram_user_id=uid,
+                    username=username,
+                    first_name=name,
                     defaults={"start_payload": payload, "source": source},
                 )
+                lead_fields = {
+                    "lead_code_prefix": "FD",
+                    "telegram_user_id": uid,
+                    "telegram_username": username,
+                    "telegram_first_name": name,
+                    "language": "uz",
+                    "start_payload": payload,
+                    "source": source,
+                    "campaign": payload,
+                    "company_name": f"Demo Food {uid}",
+                }
                 if i < leads:
                     lead = await repo.create_lead(
-                        lead_code_prefix="FD",
-                        telegram_user_id=uid,
-                        language="uz",
-                        start_payload=payload,
-                        source=source,
-                        campaign=payload,
-                        company_name=f"Demo Food {uid}",
-                        classification=(
-                            Classification.HOT.value
-                            if i < qualified
-                            else Classification.COLD.value
-                        ),
+                        contact_name=f"{name} Demo",
+                        phone=f"+99890{uid % 10_000_000:07d}",
+                        classification=Classification.HOT.value
+                        if i < qualified
+                        else Classification.COLD.value,
                         score=80 if i < qualified else 20,
+                        **lead_fields,
                     )
-                    await repo.update_lead(
-                        lead.id, completed_at=datetime.now(UTC), is_draft=False
-                    )
+                    await repo.update_lead(lead.id, completed_at=datetime.now(UTC), is_draft=False)
+                    if i % 4 == 3:  # part of the finished ones is already BOOKED
+                        await repo.update_lead(lead.id, lead_status=LeadStatus.BOOKED.value)
+                elif i < leads + 3:
+                    # a few people stopped half way: "Anketa chala" on the detail page
+                    await repo.create_lead(current_step="company", **lead_fields)
 
 
 if __name__ == "__main__":

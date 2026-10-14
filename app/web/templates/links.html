@@ -79,7 +79,9 @@
         <tbody class="divide-y">
             {% for link in links %}
             <tr class="hover:bg-gray-50">
-                <td class="px-4 py-3 font-medium text-gray-900">{{ link.title }}</td>
+                <td class="px-4 py-3 font-medium">
+                    <a href="/admin/links/{{ link.id }}" class="text-gray-900 hover:text-blue-700 hover:underline">{{ link.title }}</a>
+                </td>
                 <td class="px-4 py-3 text-gray-600">{{ link.source_label }}</td>
                 <td class="px-4 py-3">
                     <div class="flex items-center gap-2">
@@ -90,12 +92,21 @@
                         </button>
                     </div>
                 </td>
-                <td class="px-4 py-3 text-center font-semibold">{{ link.starts }}</td>
-                <td class="px-4 py-3 text-center font-semibold text-blue-700">{{ link.leads }}</td>
-                <td class="px-4 py-3 text-center font-semibold text-green-700">{{ link.qualified }}</td>
+                <td class="px-4 py-3 text-center font-semibold">
+                    <a href="/admin/links/{{ link.id }}?stage=started" class="hover:underline">{{ link.starts }}</a>
+                </td>
+                <td class="px-4 py-3 text-center font-semibold text-blue-700">
+                    <a href="/admin/links/{{ link.id }}?stage=completed" class="hover:underline">{{ link.leads }}</a>
+                </td>
+                <td class="px-4 py-3 text-center font-semibold text-green-700">
+                    <a href="/admin/links/{{ link.id }}?stage=qualified" class="hover:underline">{{ link.qualified }}</a>
+                </td>
                 <td class="px-4 py-3 text-gray-500 whitespace-nowrap">{{ link.created_at.strftime('%d.%m.%Y') if link.created_at else '—' }}</td>
-                <td class="px-4 py-3 text-right">
-                    <form method="post" action="/admin/links/{{ link.id }}/delete"
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                    <a href="/admin/links/{{ link.id }}" class="text-blue-600 hover:text-blue-800 px-2" title="{{ t('view') }}">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    <form method="post" action="/admin/links/{{ link.id }}/delete" class="inline"
                           onsubmit="return confirm('{{ t('delete_confirm') }}');">
                         <button type="submit" class="text-red-500 hover:text-red-700 px-2" title="{{ t('delete') }}">
                             <i class="fas fa-trash"></i>

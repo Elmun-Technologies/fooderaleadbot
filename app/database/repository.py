@@ -7,7 +7,7 @@ SQL themselves, and every lookup uses bound parameters (no string interpolation)
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -34,9 +34,72 @@ from app.database.models import (
     utcnow,
 )
 
-__all__ = ["LeadRepository"]
+__all__ = [
+    "TRACKING_STAGES",
+    "TRACKING_STAGE_COMPLETED",
+    "TRACKING_STAGE_DRAFT",
+    "TRACKING_STAGE_STARTED",
+    "LeadRepository",
+]
 
 _QUALIFIED: tuple[str, ...] = (Classification.HOT.value, Classification.WARM.value)
+
+#: funnel stage of one person behind a tracking link (``tracking_link_people``)
+TRACKING_STAGE_STARTED = "started"
+TRACKING_STAGE_DRAFT = "draft"
+TRACKING_STAGE_COMPLETED = "completed"
+
+TRACKING_STAGES: tuple[str, ...] = (
+    TRACKING_STAGE_STARTED,
+    TRACKING_STAGE_DRAFT,
+    TRACKING_STAGE_COMPLETED,
+)
+
+
+def _as_utc(value: datetime | None) -> datetime:
+    """Sort key for timestamps: SQLite hands back naive datetimes, treat them as UTC."""
+    if value is None:
+        return datetime.min.replace(tzinfo=UTC)
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
+
+
+def _link_person(
+    telegram_user_id: int,
+    user: BotUser | None,
+    lead: Lead | None,
+    lead_first_seen: datetime | None,
+) -> dict[str, Any]:
+    """One row of the per-link breakdown (see :meth:`LeadRepository.tracking_link_people`)."""
+    username = user.username if user is not None else None
+    if not username and lead is not None:
+        username = lead.telegram_username
+
+    first_name = user.first_name if user is not None else None
+    last_name = user.last_name if user is not None else None
+    if not (first_name or last_name) and lead is not None:
+        first_name, last_name = lead.telegram_first_name, lead.telegram_last_name
+    name = " ".join(part for part in (first_name, last_name) if part).strip()
+    if not name and lead is not None:
+        name = (lead.contact_name or "").strip()
+    if not name:
+        name = f"@{username}" if username else str(telegram_user_id)
+
+    if lead is None:
+        stage = TRACKING_STAGE_STARTED
+    elif lead.completed_at is not None:
+        stage = TRACKING_STAGE_COMPLETED
+    else:
+        stage = TRACKING_STAGE_DRAFT
+
+    first_seen = user.created_at if user is not None and user.created_at else lead_first_seen
+    return {
+        "telegram_user_id": telegram_user_id,
+        "username": username,
+        "name": name,
+        "first_seen": first_seen,
+        "stage": stage,
+        "lead": lead,
+    }
 
 
 class LeadRepository:
@@ -968,3 +1031,56 @@ class LeadRepository:
                 }
             )
         return result
+
+    async def tracking_link_people(self, payload: str) -> list[dict[str, Any]]:
+        """Everybody who arrived through one ad link - one row per person, newest first.
+
+        ``bot_users`` (accounts that pressed /start with this payload) and ``leads``
+        (draft *and* finished applications attributed to it) are merged on
+        ``telegram_user_id``, so a person who pressed start and then filled the
+        questionnaire shows up exactly once; when somebody has several applications
+        the newest one wins.
+
+        Each row carries ``telegram_user_id``, ``username``, ``name``,
+        ``first_seen`` (when the person first appeared), ``stage`` and ``lead``
+        (the ORM object, or ``None`` when there is no application yet).  ``stage``
+        is ``started`` (only pressed /start), ``draft`` (questionnaire not finished)
+        or ``completed`` (``lead.completed_at`` is set).
+        """
+        users = (
+            (await self.session.execute(select(BotUser).where(BotUser.start_payload == payload)))
+            .scalars()
+            .all()
+        )
+        leads = (
+            (
+                await self.session.execute(
+                    select(Lead)
+                    .where(Lead.start_payload == payload)
+                    .order_by(Lead.created_at.desc(), Lead.id.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        newest_lead: dict[int, Lead] = {}
+        first_lead_at: dict[int, datetime] = {}
+        for lead in leads:
+            uid = int(lead.telegram_user_id)
+            newest_lead.setdefault(uid, lead)  # rows come newest-first
+            if lead.created_at is not None and (
+                uid not in first_lead_at or _as_utc(lead.created_at) < _as_utc(first_lead_at[uid])
+            ):
+                first_lead_at[uid] = lead.created_at
+
+        # people who only have an application (no bot_users row) still must be listed
+        people: dict[int, dict[str, Any]] = {
+            uid: _link_person(uid, None, lead, first_lead_at.get(uid))
+            for uid, lead in newest_lead.items()
+        }
+        for user in users:
+            uid = int(user.telegram_user_id)
+            people[uid] = _link_person(uid, user, newest_lead.get(uid), first_lead_at.get(uid))
+
+        return sorted(people.values(), key=lambda row: _as_utc(row["first_seen"]), reverse=True)

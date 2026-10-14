@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from app.database.models import Classification
 from app.database.repository import LeadRepository
@@ -13,6 +14,7 @@ from app.services.tracking_links import (
     slugify,
     unique_payload,
 )
+from app.web.routers.links import _matches_stage
 
 
 class TestSlugify:
@@ -111,6 +113,154 @@ class TestRepositoryLinks:
         assert row["starts"] == 2
         assert row["leads"] == 1
         assert row["qualified"] == 1
+
+
+class TestTrackingLinkPeople:
+    """The per-link breakdown: one row per person plus the stage they reached."""
+
+    async def test_start_draft_and_completed_stages(self, repo: LeadRepository) -> None:
+        await repo.create_tracking_link(
+            title="Instagram dekabr", payload="instagram_dekabr", source="instagram"
+        )
+        # 1) only pressed /start
+        await repo.get_or_create_user(
+            telegram_user_id=201,
+            username="sardor",
+            first_name="Sardor",
+            defaults={"start_payload": "instagram_dekabr"},
+        )
+        # 2) started the questionnaire but left it unfinished
+        await repo.get_or_create_user(
+            telegram_user_id=202,
+            username="nodira",
+            first_name="Nodira",
+            defaults={"start_payload": "instagram_dekabr"},
+        )
+        draft = await repo.create_lead(
+            lead_code_prefix="FD",
+            telegram_user_id=202,
+            telegram_username="nodira",
+            start_payload="instagram_dekabr",
+            current_step="company",
+        )
+        # 3) filled everything in and came out HOT
+        await repo.get_or_create_user(
+            telegram_user_id=203,
+            username="bekzod",
+            first_name="Bekzod",
+            defaults={"start_payload": "instagram_dekabr"},
+        )
+        completed = await repo.create_lead(
+            lead_code_prefix="FD",
+            telegram_user_id=203,
+            telegram_username="bekzod",
+            start_payload="instagram_dekabr",
+            contact_name="Bekzod Karimov",
+            phone="+998901234567",
+            classification=Classification.HOT.value,
+        )
+        await repo.update_lead(
+            completed.id, completed_at=datetime.now(UTC), is_draft=False, current_step=None
+        )
+
+        people = await repo.tracking_link_people("instagram_dekabr")
+
+        # newest first, one row per person
+        assert [row["telegram_user_id"] for row in people] == [203, 202, 201]
+        by_id = {row["telegram_user_id"]: row for row in people}
+
+        assert by_id[201]["stage"] == "started"
+        assert by_id[201]["lead"] is None
+        assert by_id[201]["name"] == "Sardor"
+        assert by_id[201]["username"] == "sardor"
+        assert by_id[201]["first_seen"] is not None
+
+        assert by_id[202]["stage"] == "draft"
+        assert by_id[202]["lead"] is not None and by_id[202]["lead"].id == draft.id
+
+        assert by_id[203]["stage"] == "completed"
+        assert by_id[203]["lead"] is not None and by_id[203]["lead"].id == completed.id
+        # the finished row still carries the answers the managers need
+        assert by_id[203]["lead"].phone == "+998901234567"
+        assert by_id[203]["lead"].classification == Classification.HOT.value
+
+    async def test_newest_lead_wins_when_a_person_has_several(self, repo: LeadRepository) -> None:
+        await repo.create_tracking_link(title="QR banner", payload="qr_banner", source="qr")
+        first = await repo.create_lead(
+            lead_code_prefix="FD",
+            telegram_user_id=301,
+            telegram_username="dilnoza",
+            telegram_first_name="Dilnoza",
+            start_payload="qr_banner",
+        )
+        second = await repo.create_lead(
+            lead_code_prefix="FD",
+            telegram_user_id=301,
+            telegram_username="dilnoza",
+            telegram_first_name="Dilnoza",
+            start_payload="qr_banner",
+            classification=Classification.WARM.value,
+        )
+        await repo.update_lead(second.id, completed_at=datetime.now(UTC), is_draft=False)
+
+        people = await repo.tracking_link_people("qr_banner")
+
+        assert first.id != second.id
+        assert len(people) == 1
+        row = people[0]
+        assert row["telegram_user_id"] == 301
+        assert row["stage"] == "completed"
+        assert row["lead"] is not None and row["lead"].id == second.id
+        assert row["name"] == "Dilnoza"  # no bot_users row -> falls back to the lead
+        assert row["username"] == "dilnoza"
+
+    async def test_empty_link_returns_nothing(self, repo: LeadRepository) -> None:
+        await repo.create_tracking_link(title="Bo'sh link", payload="bosh_link", source="other")
+        # traffic from another link must not leak into this one
+        await repo.get_or_create_user(
+            telegram_user_id=401,
+            defaults={"start_payload": "boshqa_link"},
+        )
+        await repo.create_lead(
+            lead_code_prefix="FD",
+            telegram_user_id=401,
+            start_payload="boshqa_link",
+            classification=Classification.HOT.value,
+        )
+
+        assert await repo.tracking_link_people("bosh_link") == []
+        assert await repo.tracking_link_people("umuman_yoq") == []
+
+
+class TestLinkStageFilters:
+    """The funnel cards on /admin/links/<id> filter the table with the same rules."""
+
+    @staticmethod
+    def _person(stage: str, *, classification: str | None = None, status: str = "NEW"):
+        lead = (
+            None
+            if stage == "started"
+            else SimpleNamespace(classification=classification, lead_status=status)
+        )
+        return {"stage": stage, "lead": lead}
+
+    def test_a_stage_card_matches_its_own_stage_only(self) -> None:
+        started = self._person("started")
+        assert _matches_stage(started, "started")
+        assert not _matches_stage(started, "draft")
+        assert not _matches_stage(started, "completed")
+        assert not _matches_stage(started, "qualified")
+        assert not _matches_stage(started, "booked")
+
+    def test_qualified_card_counts_hot_and_warm(self) -> None:
+        assert _matches_stage(self._person("completed", classification="HOT"), "qualified")
+        assert _matches_stage(self._person("completed", classification="WARM"), "qualified")
+        assert not _matches_stage(self._person("draft", classification="COLD"), "qualified")
+
+    def test_booked_card_needs_the_pipeline_status(self) -> None:
+        booked = self._person("completed", classification="HOT", status="BOOKED")
+        assert _matches_stage(booked, "booked")
+        assert not _matches_stage(self._person("completed", classification="HOT"), "booked")
 
 
 class TestResolveSource:

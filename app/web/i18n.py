@@ -90,6 +90,12 @@ TRANSLATIONS = {
         "delete": "O'chirish",
         "delete_confirm": "Linkni o'chirasizmi? Statistika saqlanadi, lekin link ro'yxatdan yo'qoladi.",
         "links_error_name": "Nom bo'sh yoki noto'g'ri. Harf va raqamlardan iborat nom yozing.",
+        "back_to_links": "Barcha linklar",
+        "funnel_stage": "Bosqich",
+        "stage_started": "Faqat start bosgan",
+        "stage_draft": "Anketa chala",
+        "stage_completed": "Tugatgan",
+        "no_people_yet": "Bu link orqali hali hech kim kelmagan.",
     },
     "ru": {
         "login": "Вход",
@@ -178,6 +184,12 @@ TRANSLATIONS = {
         "delete": "Удалить",
         "delete_confirm": "Удалить ссылку? Статистика сохранится, но ссылка исчезнет из списка.",
         "links_error_name": "Название пустое или неверное. Используйте буквы и цифры.",
+        "back_to_links": "Все ссылки",
+        "funnel_stage": "Этап",
+        "stage_started": "Только нажал start",
+        "stage_draft": "Анкета не закончена",
+        "stage_completed": "Завершил",
+        "no_people_yet": "По этой ссылке пока никто не пришёл.",
     },
 }
 

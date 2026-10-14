@@ -340,6 +340,11 @@ NEW ──► CONTACTED ──► NEGOTIATION ──► BOOKED ──► CLOSED
 - `/link` with no arguments lists every link with its numbers (starts → applications → qualified).
 - The admin panel page **/admin/links** does the same with a form, copy buttons and a live
   stats table; links are stored in the `tracking_links` table.
+- **/admin/links/&lt;id&gt;** opens one link: the funnel cards (everyone · only pressed start ·
+  unfinished form · finished · qualified/BOOKED) count the people behind every number and
+  filter the table below when clicked. The table lists them one by one — name and `@username`,
+  the stage they reached, HOT/WARM, status, phone and a button that jumps straight to the lead
+  card — so "12 applications" can be checked person by person.
 - On `/start` the payload is first looked up in `tracking_links` (stored source wins);
   unknown payloads still fall back to the `parse_start_payload` grammar, so nothing is lost.
 
