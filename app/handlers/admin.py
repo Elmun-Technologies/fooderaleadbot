@@ -8,7 +8,6 @@ card may additionally be used by members of the private sales group (toggle with
 from __future__ import annotations
 
 import logging
-import re
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -24,7 +23,7 @@ from app.filters import IsOwnerOrAdmin
 from app.i18n import option_label, t
 from app.services.lead_service import LeadService
 from app.services.notification import LeadNotifier, build_lead_card
-from app.services.source_tracking import SOURCE_ALIASES, SOURCE_LABELS, parse_start_payload
+from app.services.source_tracking import SOURCE_LABELS
 from app.services.statuses import ACTION_STATUS, STATUS_LABEL_KEYS, is_valid_status
 from app.utils.text import clean_text, esc, format_datetime
 
@@ -152,7 +151,10 @@ async def admin_command(message: Message, command: CommandObject, **data: Any) -
         return
 
     if name == "link":
-        await _reply(message, await _build_tracking_link(bot or message.bot, args))
+        await _reply(
+            message,
+            await _tracking_link_command(repo, bot or message.bot, args, message.from_user),
+        )
         return
 
     if name == "lead":
@@ -404,81 +406,67 @@ async def _stats(repo: Any, settings: Settings) -> str:
     return "\n".join(lines)
 
 
-_LINK_EXAMPLES = (
-    ("tgads foodera video01", "Telegram Ads reklamasi"),
-    ("channel kiss post12", "Telegram kanaldagi post"),
-    ("instagram promo story1", "Instagram story / post"),
-    ("qr tashkent banner1", "QR kod / banner (offline)"),
-)
+async def _tracking_link_command(repo: Any, bot: Any, args: str, from_user: Any) -> str:
+    """Dead-simple ``/link``: a NAME in -> a ready link out, stats when called bare.
 
-
-def format_tracking_link(bot_username: str, args: str) -> str:
-    """Build a ready-to-use attribution deep link from free-form admin input.
-
-    ``/link tgads foodera video01`` ->
-    ``https://t.me/<bot>?start=tgads_foodera_video01`` plus a preview of how the
-    payload will be classified (source / campaign / creative).
+    * ``/link Instagram dekabr`` - creates the link and returns the URL to paste.
+    * ``/link``                  - shows every link with its numbers.
     """
+    from app.services.tracking_links import (
+        build_deep_link,
+        detect_source,
+        slugify,
+        source_choice_label,
+        unique_payload,
+    )
+
+    me = await bot.get_me()
+    username = me.username or "your_bot"
     args = (args or "").strip()
+
     if not args:
+        rows = await repo.tracking_link_stats()
         lines = [
-            "<b>🔗 Treking link yaratish</b>",
+            "<b>🔗 Reklama linklari</b>",
             "",
-            "Har bir reklama uchun ALOHIDA link yarating - shunda /source hisobotida",
-            "qaysi reklamadan nechta lead kelgani ko'rinadi.",
-            "",
-            "Format: <code>/link &lt;manba&gt; &lt;kampaniya&gt; [kreativ]</code>",
-            "",
-            "Misollar:",
+            "Yangi link: <code>/link Nomi</code> (masalan: <code>/link Instagram dekabr</code>)",
+            "Admin panelda boshqarish: <b>/admin/links</b>",
         ]
-        for example, note in _LINK_EXAMPLES:
-            payload = _sanitize_payload(example)
-            lines.append(
-                f"• <code>/link {esc(example)}</code> - {esc(note)}\n"
-                f"  → <code>https://t.me/{esc(bot_username)}?start={esc(payload)}</code>"
-            )
-        known = ", ".join(sorted(SOURCE_ALIASES))
-        lines.extend(["", f"<i>Tanilgan manba kodlari: {esc(known)}</i>"])
+        if rows:
+            lines.append("")
+            for row in rows[:15]:
+                lines.append(
+                    f"<b>{esc(row['title'])}</b>\n"
+                    f"  <code>{esc(build_deep_link(username, row['payload']))}</code>\n"
+                    f"  start: {row['starts']} · anketa: {row['leads']} · "
+                    f"saralangan: {row['qualified']}"
+                )
+        else:
+            lines.extend(["", "<i>Hozircha linklar yo'q.</i>"])
         return "\n".join(lines)
 
-    payload = _sanitize_payload(args)
-    if not payload:
-        return "Linkda faqat lotin harflari, raqamlar, '_' va '-' ishlatilishi mumkin."
+    title = args[:128]
+    base = slugify(title)
+    if not base:
+        return "Nom harf yoki raqamlardan iborat bo'lsin. Masalan: /link Instagram dekabr"
 
-    info = parse_start_payload(payload)
-    link = f"https://t.me/{bot_username}?start={payload}"
-    lines = [
-        "<b>🔗 Tayyor treking link:</b>",
-        f"<code>{esc(link)}</code>",
-        "",
-        "Bot qanday qayd etadi:",
-        f"• Manba: <b>{esc(info.source_label)}</b>",
-        f"• Kampaniya: <code>{esc(info.campaign or '—')}</code>",
-        f"• Kreativ: <code>{esc(info.creative or '—')}</code>",
-    ]
-    if info.source in ("unknown", "direct"):
-        known = ", ".join(sorted(SOURCE_ALIASES))
-        lines.extend(
-            [
-                "",
-                "⚠️ Birinchi so'z tanilgan manba kodi emas, shuning uchun hisobotda",
-                "<b>Unknown</b> bo'lib ko'rinadi. Tanilgan kodlardan birini ishlating:",
-                f"<i>{esc(known)}</i>",
-            ]
-        )
-    return "\n".join(lines)
-
-
-def _sanitize_payload(args: str) -> str:
-    """Telegram start payload: A-Z a-z 0-9 _ - only, max 64 chars."""
-    payload = re.sub(r"\s+", "_", args.strip().lower())
-    payload = re.sub(r"[^a-z0-9_\-]", "", payload)
-    return payload.strip("_-")[:64]
-
-
-async def _build_tracking_link(bot: Any, args: str) -> str:
-    me = await bot.get_me()
-    return format_tracking_link(me.username or "your_bot", args)
+    taken = await repo.tracking_payloads()
+    payload = unique_payload(base, taken)
+    source = detect_source(title)
+    link = await repo.create_tracking_link(
+        title=title,
+        payload=payload,
+        source=source,
+        created_by=from_user.id if from_user else None,
+    )
+    url = build_deep_link(username, link.payload)
+    return (
+        f"✅ <b>{esc(title)}</b> uchun link tayyor:\n"
+        f"<code>{esc(url)}</code>\n\n"
+        f"Manba: <b>{esc(source_choice_label(source))}</b>\n"
+        "Shu linkni reklamaga qo'ying - kim bosganini bot o'zi sanaydi.\n"
+        "Natijalar: /link yoki admin paneldagi \"Reklama linklari\" sahifasi."
+    )
 
 
 async def _sources(repo: Any) -> str:

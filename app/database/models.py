@@ -35,6 +35,7 @@ __all__ = [
     "LeadEvent",
     "LeadStatus",
     "LeadType",
+    "TrackingLink",
     "utcnow",
 ]
 
@@ -479,3 +480,25 @@ class FollowUpLog(Base):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<FollowUpLog template={self.template_id} user={self.telegram_user_id} status={self.status}>"
+
+
+class TrackingLink(Base):
+    """Named ad link ("Reklama linki") created from the admin panel or /link.
+
+    The payload is what goes after ``?start=`` - when a user taps the link,
+    /start looks the payload up here and copies ``source``/``payload`` into the
+    attribution, so the report shows exactly which ad brought the person.
+    """
+
+    __tablename__ = "tracking_links"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(128))
+    payload: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    source: Mapped[str] = mapped_column(String(32), default="other", server_default="other")
+
+    created_by: Mapped[int | None] = mapped_column(BigInt)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<TrackingLink id={self.id} payload={self.payload} source={self.source}>"

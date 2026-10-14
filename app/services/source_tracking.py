@@ -51,6 +51,7 @@ SOURCE_LABELS: dict[str, str] = {
     "instagram": "Instagram",
     "facebook": "Facebook",
     "direct": "Direct",
+    "other": "Boshqa / Other",
     "unknown": "Unknown",
 }
 

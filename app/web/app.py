@@ -126,7 +126,7 @@ async def switch_lang(lang_code: str, request: Request):
 
 
 # Include routers
-from app.web.routers import dashboard, leads, broadcast, chat, analytics, followup
+from app.web.routers import dashboard, leads, broadcast, chat, analytics, followup, links
 
 app.include_router(dashboard.router, prefix="/admin", tags=["dashboard"])
 app.include_router(leads.router, prefix="/admin", tags=["leads"])
@@ -134,6 +134,7 @@ app.include_router(broadcast.router, prefix="/admin", tags=["broadcast"])
 app.include_router(chat.router, prefix="/admin", tags=["chat"])
 app.include_router(analytics.router, prefix="/admin", tags=["analytics"])
 app.include_router(followup.router, prefix="/admin", tags=["followup"])
+app.include_router(links.router, prefix="/admin", tags=["links"])
 
 
 @app.get("/health", include_in_schema=False)

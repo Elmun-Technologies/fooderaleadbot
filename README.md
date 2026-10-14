@@ -329,13 +329,19 @@ NEW ──► CONTACTED ──► NEGOTIATION ──► BOOKED ──► CLOSED
 
 **User** (private chat): `/start [payload]` · `/help` · `/restart`
 **Admin** (any chat, restricted to `ADMIN_USER_IDS`): `/stats` · `/leads [n]` · `/hot [n]` ·
-`/warm [n]` · `/today` · `/source` · `/link [source campaign creative]` · `/lead <id|FD000042>` ·
+`/warm [n]` · `/today` · `/source` · `/link [name]` · `/lead <id|FD000042>` ·
 `/setstatus <id|FD000042> <STATUS>` · `/chatid`
 
-`/link` builds a ready-to-paste attribution deep link for an ad placement, e.g.
-`/link tgads foodera video01` → `https://t.me/<bot>?start=tgads_foodera_video01`, and
-previews how the payload will be classified (source / campaign / creative). Give every
-ad its own link and `/source` will show exactly which ad each lead came from.
+**Tracking links ("Reklama linklari").** Every ad placement gets its own named link so
+`/source` and the admin panel show exactly which ad brought each lead:
+
+- `/link Instagram dekabr` → creates the link and replies with a ready URL
+  (`https://t.me/<bot>?start=instagram_dekabr`); the source is guessed from the name.
+- `/link` with no arguments lists every link with its numbers (starts → applications → qualified).
+- The admin panel page **/admin/links** does the same with a form, copy buttons and a live
+  stats table; links are stored in the `tracking_links` table.
+- On `/start` the payload is first looked up in `tracking_links` (stored source wins);
+  unknown payloads still fall back to the `parse_start_payload` grammar, so nothing is lost.
 
 Callback data (small, stable grammar — every handler is idempotent):
 

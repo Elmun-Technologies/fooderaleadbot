@@ -30,6 +30,7 @@ from app.database.models import (
     LeadEvent,
     LeadStatus,
     LeadType,
+    TrackingLink,
     utcnow,
 )
 
@@ -876,3 +877,94 @@ class LeadRepository:
             status=FollowUpStatus.PENDING.value,
             scheduled_at=scheduled_at,
         )
+
+    # ------------------------------------------------------------------ tracking links
+
+    async def create_tracking_link(
+        self, *, title: str, payload: str, source: str = "other", created_by: int | None = None
+    ) -> TrackingLink:
+        link = TrackingLink(
+            title=title.strip()[:128], payload=payload, source=source, created_by=created_by
+        )
+        self.session.add(link)
+        await self.session.commit()
+        await self.session.refresh(link)
+        return link
+
+    async def tracking_link_by_payload(self, payload: str) -> TrackingLink | None:
+        stmt = select(TrackingLink).where(TrackingLink.payload == payload)
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def get_tracking_link(self, link_id: int) -> TrackingLink | None:
+        return await self.session.get(TrackingLink, link_id)
+
+    async def list_tracking_links(self) -> Sequence[TrackingLink]:
+        stmt = select(TrackingLink).order_by(TrackingLink.created_at.desc())
+        return (await self.session.execute(stmt)).scalars().all()
+
+    async def tracking_payloads(self) -> set[str]:
+        stmt = select(TrackingLink.payload)
+        return {str(value) for value in (await self.session.execute(stmt)).scalars().all()}
+
+    async def delete_tracking_link(self, link_id: int) -> bool:
+        row = await self.session.get(TrackingLink, link_id)
+        if row is None:
+            return False
+        await self.session.delete(row)
+        await self.session.commit()
+        return True
+
+    async def tracking_link_stats(self) -> list[dict[str, Any]]:
+        """Every saved link with its funnel: starts -> applications -> qualified.
+
+        * ``starts``  - users whose current attribution payload is this link
+        * ``leads``   - completed applications that came through the link
+        * ``qualified`` - of those, HOT + WARM
+        """
+        links = await self.list_tracking_links()
+        if not links:
+            return []
+        payloads = [link.payload for link in links]
+
+        starts_stmt = (
+            select(BotUser.start_payload, func.count())
+            .where(BotUser.start_payload.in_(payloads))
+            .group_by(BotUser.start_payload)
+        )
+        starts = {
+            str(payload): int(count)
+            for payload, count in (await self.session.execute(starts_stmt)).all()
+        }
+
+        leads_stmt = (
+            select(
+                Lead.start_payload,
+                func.sum(case((Lead.completed_at.is_not(None), 1), else_=0)).label("completed"),
+                func.sum(case((Lead.classification.in_(_QUALIFIED), 1), else_=0)).label(
+                    "qualified"
+                ),
+            )
+            .where(Lead.start_payload.in_(payloads))
+            .group_by(Lead.start_payload)
+        )
+        lead_rows = {
+            str(row.start_payload): (int(row.completed or 0), int(row.qualified or 0))
+            for row in (await self.session.execute(leads_stmt)).all()
+        }
+
+        result: list[dict[str, Any]] = []
+        for link in links:
+            completed, qualified = lead_rows.get(link.payload, (0, 0))
+            result.append(
+                {
+                    "id": link.id,
+                    "title": link.title,
+                    "payload": link.payload,
+                    "source": link.source,
+                    "created_at": link.created_at,
+                    "starts": starts.get(link.payload, 0),
+                    "leads": completed,
+                    "qualified": qualified,
+                }
+            )
+        return result
